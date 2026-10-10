@@ -39,6 +39,17 @@ cd "$MTS_CONTENT_ROOT"
 
 # Setting commands and session start run even while saving is off.
 # Manual writers need the app's session id. The worker needs only the current setting.
+case "${1:-}:${2:-}" in
+ timesaver-install/runtime/memory.ts:write-memory|timesaver-install/runtime/memory.ts:save-chat|timesaver-install/runtime/memory.ts:landmark)
+  if [ "${2:-}" = write-memory ] && [ "${3:-}" = --quote-labels ] && [ "$#" -eq 3 ]; then :; else
+   if "$bun" "$MTS_CONTENT_ROOT/timesaver-install/runtime/privacy.ts" save-check "$@"; then :; else
+    status=$?
+    case "$status" in 2) exit 0 ;; *) exit 1 ;; esac
+   fi
+  fi
+ ;;
+ timesaver-install/runtime/memory.ts:*) ;;
+ *)
 case "${1:-}" in
  */privacy.ts|*/session-start.ts|timesaver-install/runtime/read-memory.ts|timesaver-install/runtime/remove.ts|timesaver-install/runtime/move.ts|timesaver-install/runtime/import-old-memory.ts|timesaver-install/runtime/team-message.ts|MY-MIND/MY-SYSTEM/utilities/mindy-search.ts|MY-MIND/MY-SYSTEM/utilities/claude-chat-keeping.ts|bin/save-failure.ts) ;;
  *)
@@ -61,7 +72,14 @@ case "${1:-}" in
   fi
  ;;
 esac
+ ;;
+esac
 case "${1:-}" in
+ timesaver-install/runtime/memory.ts)
+  case "${2:-}" in
+   save-chat|landmark) exec "$bun" timesaver-install/runtime/privacy.ts save-run "$@" ;;
+  esac
+  exec "$bun" "$@" ;;
  MY-MIND/MY-SYSTEM/utilities/transcript.ts)
   exec "$bun" timesaver-install/runtime/privacy.ts save-run "$@" ;;
  *) exec "$bun" "$@" ;;

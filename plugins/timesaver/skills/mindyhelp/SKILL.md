@@ -13,6 +13,7 @@ If the person asks what MINDY TimeSaver can do, or chooses "show me what it can 
 For /mindyhelp, show only these lines, exactly. Do not run a command or change anything.
 
 Type /mindyend at the end of a session to save it.
+Use /mindysave to keep the words of a chat.
 Use /mindyload to give your AI all the context it needs for any work you've saved.
 Use /mindysearch to search for anything in your MTS.
 Use /mindyteam to send a bug report, give feedback or ask a question.

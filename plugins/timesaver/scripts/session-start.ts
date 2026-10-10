@@ -27,10 +27,10 @@ function start(name: string, entrypoint: string, logRoot: string, env: Record<st
 if (import.meta.main) {
 	const contentRoot = process.env.MTS_CONTENT_ROOT;
 	const stateRoot = process.env.MTS_STATE_ROOT;
-	if (!contentRoot || !stateRoot || process.env.MTS_PRODUCT !== "mts") throw new Error("MINDY TimeSaver cannot find its installed folders.");
+	if (!contentRoot || !stateRoot) throw new Error("MINDY TimeSaver cannot find its installed folders.");
 	const installedParts = join(contentRoot, "timesaver-install");
-	const { migrateMemberTimeSaver } = await import(join(contentRoot, "MY-MIND/MY-SYSTEM/utilities/mts-member-update.ts"));
-	migrateMemberTimeSaver(contentRoot, process.env.MTS_RUNTIME_SCRATCH_DIR ?? join(stateRoot, "runtime-scratch"));
+	const { migratePersonTimeSaver } = await import(join(contentRoot, "MY-MIND/MY-SYSTEM/utilities/mts-person-update.ts"));
+	migratePersonTimeSaver(contentRoot, process.env.MTS_RUNTIME_SCRATCH_DIR ?? join(stateRoot, "runtime-scratch"));
 	const { timeSaverStatus, areTimeconeReportsOff } = await import(join(installedParts, "runtime/privacy.ts"));
  // No per-session off history is kept. A later /mindyend checks the current setting.
  const current = timeSaverStatus();

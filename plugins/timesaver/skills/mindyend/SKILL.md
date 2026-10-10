@@ -99,7 +99,7 @@ After the first check allows saving, identify the session, answer the capture qu
 
 ### Prepare the capture
 
-Identify what this session worked on. Create a lowercase, hyphenated slug from its name. MINDY TimeSaver has no floors, areas, aims or map administration.
+Identify what this session worked on. Create a lowercase, hyphenated slug from its name.
 
 Always include one `summary` entry covering the whole conversation's substantive work from its beginning, including earlier work, options, decisions and what remains open. Apply the factual, kind and TimeSaver-exclusion rules above to the summary and all five entry types. Read back through all available conversation context before composing it. Do not summarise only the final exchange. Answer these five questions in the AI's own words, in this order. Leave out an entry when the session does not support it:
 
@@ -126,7 +126,7 @@ MTS_ENTRIES
 
 The writer appends the entries and their capture-batch journal inside the MINDY TimeSaver folder. Saving off, a damaged setting or an unidentified session saves nothing. Only the current saving setting decides, regardless of whether the session ran while saving was off. A successful exit alone is not a confirmed write: require a confirmed entry count and `MINDY TimeSaver memory usable: yes`. An identical retry reports the already stored count and adds nothing. Apply the refusal rule above whenever the writer returns `MTS_SAVE_REFUSED`.
 
-Your memory is kept on this Mac. When you start a session and earlier days are ready to summarise, MINDY TimeSaver uses your AI to write daily to yearly summaries from those saved entries, which uses some of your AI usage. Switching saving off with /timesaver-off also stops this. When a save fails, a short report with your membership number but no conversation or memory content is sent to the MINDY team so it can be fixed, unless you have switched bug reports off with /timesaver-reports-off.
+Your memory is kept on this Mac. When you start a session and earlier days are ready to summarise, MINDY TimeSaver uses your AI to write daily to yearly summaries from those saved entries, which uses some of your AI usage. Switching saving off with /timesaver-off also stops this. When a save fails, a short report with your access code number but no conversation or memory content is sent to the MINDY team so it can be fixed, unless you have switched bug reports off with /timesaver-reports-off.
 
 Only if there is no `MTS_SAVE_REFUSED` marker and the writer reports a real write failure or its write is unconfirmed, keep the conversation and attempted entries in the local app transcript and follow the failure path above. In Codex, save the transcript with `codex-current-save` as specified above. Do not give a success confirmation.
 

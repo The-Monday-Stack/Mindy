@@ -19,6 +19,7 @@ print_welcome() {
 
 show_help() {
  printf '%s\n' "Type /mindyend at the end of a session to save it."
+ printf '%s\n' "Use /mindysave to keep the words of a chat."
  printf '%s\n' "Use /mindyload to give your AI all the context it needs for any work you've saved."
  printf '%s\n' "Use /mindysearch to search for anything in your MTS."
  printf '%s\n' "Use /mindyteam to send a bug report, give feedback or ask a question."
@@ -97,10 +98,10 @@ report_stop() {
 		printf 'MINDY TimeSaver setup stop\nTime (UTC): %s\nStep: %s\nReason: %s\n' "$stamp" "$step" "$1" >"$note" 2>/dev/null || :
 		chmod 600 "$note" 2>/dev/null || :
 	fi
-	membership_number=${code%.*}
-	case "$membership_number" in ''|*[!A-Za-z0-9-]*) return 0 ;; esac
-	[ "$membership_number" != "$code" ] || return 0
-	report=$(printf '{"report":"mts-setup-stop/v1","product":"mts","reportId":"%s","membershipNumber":"%s","step":"%s","reason":"%s","stoppedAt":"%s"}' "$(json_text "$report_id")" "$(json_text "$membership_number")" "$(json_text "$step")" "$(json_text "$1")" "$(json_text "$stamp")")
+	access_number=${code%.*}
+	case "$access_number" in ''|*[!A-Za-z0-9-]*) return 0 ;; esac
+	[ "$access_number" != "$code" ] || return 0
+	report=$(printf '{"report":"mts-setup-stop/v1","product":"mts","reportId":"%s","membershipNumber":"%s","step":"%s","reason":"%s","stoppedAt":"%s"}' "$(json_text "$report_id")" "$(json_text "$access_number")" "$(json_text "$step")" "$(json_text "$1")" "$(json_text "$stamp")")
 	if printf '%s' "$report" | gate_curl -sS --connect-timeout 5 --max-time 10 -H 'Content-Type: application/json' --data-binary @- 'https://gate.mindy.build/mts/setup-stops' >/dev/null 2>&1; then :; fi
 	return 0
 }
@@ -391,6 +392,7 @@ fi
 (cd "$release" && HOME="$home" "$bun" "$installer" "$release" "$content_root" "$state_root" --finalize) >/dev/null 2>&1 || { rollback_registration; fail_as "$generic"; }
 if [ "$account_plugin" = true ]; then printf '%s\n' '{"stage":"chat-keeping"}' >"$state_root/setup-progress.json"; fi
 
+if [ -f "$state_root/memory-note-warning.txt" ]; then cat "$state_root/memory-note-warning.txt"; fi
 finished=true
 printf '%s\n' "MINDY TimeSaver is now in $content_root"
 if [ "${account_plugin:-false}" = true ]; then

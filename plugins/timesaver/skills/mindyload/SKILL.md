@@ -141,7 +141,7 @@ If the user types mindyload with no argument, list the available sessions and da
 "${CLAUDE_PLUGIN_ROOT}/scripts/bun-runtime.sh" timesaver-install/runtime/read-memory.ts --browse
 ```
 
-For each returned item, show its `label` as ordinary text, exactly as returned, for example: `2026-10-05, session: timesaver test followup`. Never show its `path`, a filename, or code formatting. Keep its path only to read the chosen item. Do not read any files. Nothing gets read into context until the user picks. Only a picked hit with `source` may load outside memory, through the same `--path` reader. Otherwise do not load files outside MINDY TimeSaver memory, including floors, areas and aims. Do not change files during mindyload.
+For each returned item, show its `label` as ordinary text, exactly as returned, for example: `2026-10-05, session: timesaver test followup`. Never show its `path`, a filename, or code formatting. Keep its path only to read the chosen item. Do not read any files. Nothing gets read into context until the user picks. Only a picked hit with `source` may load outside memory, through the same `--path` reader. Otherwise do not load files outside MINDY TimeSaver memory. Do not change files during mindyload.
 
 If the reader returns `MTS_SAVE_REFUSED`, relay its following message word for word, hide the marker and stop. Otherwise, if the reader fails, say exactly: `MINDY TimeSaver could not load your saved sessions.`
 
@@ -163,4 +163,4 @@ If the reader returns `MTS_SAVE_REFUSED`, relay its following message word for w
 | `mindyload latest` | Read | Reads the most recent daily summary, or the most recent session if there is no daily summary |
 | `mindyload` | Browse | Lists available memory by name |
 | `mindyload the thing from the other day` | Browse | mindy-search finds MINDY TimeSaver matches → lists them, asks which one |
-| `mindyload coaching session` | Search | A clear name match loads immediately even when other memories mention it; otherwise several matches are listed |
+| `mindyload planning session` | Search | A clear name match loads immediately even when other memories mention it; otherwise several matches are listed |
