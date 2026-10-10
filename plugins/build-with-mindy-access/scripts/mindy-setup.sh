@@ -1,9 +1,9 @@
 #!/bin/sh
 set -eu
 
-# How a member starts MINDY, in every message below that says so: /mindy in Claude Code, and @mindy in
+# How a member starts MINDY, in every message below that says so: /install-bwm in Claude Code, and /install-bwm in
 # the ChatGPT app, where MINDY members use Codex. Both forms are written here and nowhere else in this
-# script, so a different form is one edit. The /mindy skill repeats the no-code message in both forms,
+# script, so a different form is one edit. The /install-bwm skill repeats the no-code message in both forms,
 # and a test holds them the same.
 #
 # Claude Code marks the commands it runs with CLAUDECODE. The ChatGPT app starts Codex with
@@ -11,8 +11,8 @@ set -eu
 # codex), and Codex marks the commands it runs with CODEX_THREAD_ID, or CODEX_SANDBOX and
 # CODEX_SANDBOX_NETWORK_DISABLED when it runs them in its sandbox. Members use Codex only in the
 # ChatGPT app, so any of the Codex marks means the app.
-start_mindy_in_claude_code='type /mindy'
-start_mindy_in_the_chatgpt_app='type @mindy'
+start_mindy_in_claude_code='type /install-bwm'
+start_mindy_in_the_chatgpt_app='type /install-bwm'
 start_mindy=$start_mindy_in_claude_code
 if [ -z "${CLAUDECODE:-}" ] && [ -n "${CODEX_INTERNAL_ORIGINATOR_OVERRIDE:-}${CODEX_CLI_PATH:-}${CODEX_THREAD_ID:-}${CODEX_SANDBOX:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}" ]; then
 	start_mindy=$start_mindy_in_the_chatgpt_app
@@ -24,14 +24,14 @@ start_mindy_capital="$(printf '%s' "$start_mindy" | cut -c 1 | tr '[:lower:]' '[
 # took the stop report; otherwise the unreachable message or the not-taken ending is printed instead.
 no_code_message="This needs your MINDY access code, which came in the message with your install steps. $start_mindy_capital, a space and your code, all on one line."
 not_issued_message="This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then $start_mindy with it."
-not_active_message="This MINDY access code is no longer active, so it can't download MINDY. MINDY has already been sent the details."
+not_active_message="This MINDY access code is no longer active, so it can't download MINDY. MINDY has sent Mike the details."
 different_code_message="This Mac already has a different MINDY access code saved, and MINDY uses one code per Mac. $start_mindy_capital with that earlier code. MINDY has already been sent the details, in case you no longer have it."
-unsigned_message="This download is not a signed MINDY release, so setup stopped before installing anything, to keep your Mac safe. MINDY has already been sent the details. Check you're on your usual internet connection, then $start_mindy with your access code again."
+unsigned_message="This download is not a signed MINDY release, so setup stopped before installing anything, to keep your Mac safe. MINDY has sent Mike the details. Check you're on your usual internet connection, then $start_mindy with your access code again."
 too_many_message="Too many tries from this internet connection in the last minute, so MINDY's download server is pausing for a moment. Wait a minute, then $start_mindy with your access code again."
 unreachable_message="Setup could not reach MINDY's download server, so MINDY could not be sent the details. Check you are online, then $start_mindy with your access code again."
 # Any other stop is "Setup stopped while <step>: <reason>." and one of these two endings.
-details_sent_ending="MINDY has already been sent the details. $start_mindy_capital with your access code to try again."
-details_not_taken_ending="MINDY's download server couldn't take the details just now. $start_mindy_capital with your access code to try again."
+details_sent_ending="MINDY has sent Mike the details. $start_mindy_capital with your access code to try again."
+details_not_taken_ending="MINDY could not send Mike the details. Check you are online, then $start_mindy with your access code to try again."
 interrupted_message="Setup stopped because it was interrupted. $start_mindy_capital with your access code to start again."
 
 # The <reason> in "Setup stopped while saving your access code on this Mac: <reason>." for each case
@@ -49,34 +49,89 @@ access_code_reason() {
 	esac
 }
 
+memory_first_message='Install MINDY TimeSaver first. Open Plugins, add MINDY TimeSaver Setup from mindy-plugin, and type /install-mts with your access code. When it has finished, type /install-bwm with your code again.'
+
 # The code comes on standard input, first line, after --code-on-stdin, so it is not in this script's
 # arguments for the process list to show. --code <code> still works, for a skill written before that.
 code=
 if [ "${1:-}" = "--code-on-stdin" ]; then code=$(sed -n '1p' | tr -d ' \t\r') || code=
 elif [ "${1:-}" = "--code" ] && [ "${2:-}" != "" ]; then code=$2; fi
 if [ -z "$code" ]; then printf '%s\n' "$no_code_message"; exit 0; fi
+# Only the identified Local Code skill route enables records without the CLI.
+for setup_option in "$@"; do
+ if [ "$setup_option" = --claude-local ]; then MINDY_CLAUDE_LOCAL=1; export MINDY_CLAUDE_LOCAL; fi
+done
 exec 2>/dev/null
 
 # The code is a secret. Everything this script prints or keeps goes through redact, which replaces
 # the whole code, and its signature half on its own, with [code removed]. Either one shorter than 16
 # characters is left alone: a real code is far longer, and its signature half alone is 86 characters,
-# so a mistyped scrap, or an ordinary word typed as the code, cannot garble the sentences.
+# so a mistyped scrap, or an ordinary word typed as the code, cannot garble the sentences. A code is
+# found even when something that shows nothing has been put inside it (a zero-width space or joiner, a
+# soft hyphen, a direction mark, a byte order mark and the like), when it was hard-wrapped across
+# lines, with the line break (a Windows one too), and any spaces beside it, inside the code, or when
+# the code as typed holds such marks itself. Those are the only things redact looks for: unlike the
+# Mac-side utility that sends a mindysetup stop, it has no rule for something merely shaped like a code,
+# for a bare run of signature characters, or for a Bearer token.
 code_signature=${code##*.}
 [ "$code_signature" != "$code" ] || code_signature=
+# The marks that show nothing, as the bytes of their UTF-8, one pattern of alternatives, the same
+# marks as mysetup-stop-report.ts: U+00AD, U+034F, U+061C, U+115F and U+1160, U+17B4 and U+17B5,
+# U+180B to U+180F, U+200B to U+200F, U+202A to U+202E, U+2060 to U+206F, U+2800, U+3164, U+FE00 to
+# U+FE0F, U+FEFF, U+FFA0, U+FFF9 to U+FFFB, U+1D173 to U+1D17A and the tag characters U+E0000 to U+E007F.
+invisible_marks=$(printf '\302\255|\315\217|\330\234|\341\205[\237\240]|\341\236[\264\265]|\341\240[\213-\217]|\342\200[\213-\217]|\342\200[\252-\256]|\342\201[\240-\257]|\342\240\200|\343\205\244|\357\270[\200-\217]|\357\273\277|\357\276\240|\357\277[\271-\273]|\360\235\205[\263-\272]|\363\240\200[\200-\277]|\363\240\201[\200-\277]')
+# Standard input with the code taken out, a few lines at a time: a code can only be spread over a few
+# lines, so each hundred lines are searched together with the last lines of the hundred before, which
+# are held back until then. The held-back lines are enough to hold more than the whole code, so a code
+# is never cut between two searches, and the cost grows with the length of the input, not with its
+# square. When no code long enough is given, the input passes through as it is.
 redact() {
-	MINDY_SETUP_REDACT_CODE=$code MINDY_SETUP_REDACT_SIGNATURE=$code_signature awk '
-		BEGIN { secrets[1] = ENVIRON["MINDY_SETUP_REDACT_CODE"]; secrets[2] = ENVIRON["MINDY_SETUP_REDACT_SIGNATURE"]; minimum[1] = 16; minimum[2] = 16 }
-		{
-			line = $0
+	MINDY_SETUP_REDACT_CODE=$code MINDY_SETUP_REDACT_SIGNATURE=$code_signature MINDY_SETUP_INVISIBLE=$invisible_marks LC_ALL=C awk '
+		# A character as plain text inside a pattern.
+		function plain(c) { return index("\\^$.[]|()*+?{}", c) ? "\\" c : c }
+		# A pattern for the secret with, between each two of its characters, anything that may have been
+		# put there: a mark that shows nothing, or a line break with the spaces beside it.
+		function wrapped(secret,    re, i, n) {
+			re = ""; n = length(secret)
+			for (i = 1; i <= n; i++) re = re plain(substr(secret, i, 1)) (i < n ? gap : "")
+			return re
+		}
+		# The held lines with the code taken out. Unless this is the end, all but the last lines are
+		# printed, and the last lines stay held: at least `quota` characters that are not spaces, so
+		# that a code which starts before them and goes on in the lines still to come is still whole
+		# in what is held, and at most 400 lines.
+		function flush(final,    k, out, n, lines, start, count, piece, i) {
 			for (k = 1; k <= 2; k++) {
-				secret = secrets[k]; size = length(secret)
-				if (size < minimum[k]) continue
+				if (pattern[k] == "") continue
 				out = ""
-				while ((at = index(line, secret)) > 0) { out = out substr(line, 1, at - 1) "[code removed]"; line = substr(line, at + size) }
-				line = out line
+				while (match(text, pattern[k]) > 0) { out = out substr(text, 1, RSTART - 1) "[code removed]"; text = substr(text, RSTART + RLENGTH) }
+				text = out text
 			}
-			print line
-		}'
+			if (final) { print text; held = 0; return }
+			if (text == "") { n = 1; lines[1] = "" } else n = split(text, lines, "\n")
+			start = n + 1; count = 0
+			while (start > 1 && n - start < 400 && count < quota) {
+				start--; piece = lines[start]; gsub(/[ \t\r]/, "", piece); count += length(piece)
+			}
+			text = ""
+			for (i = 1; i < start; i++) print lines[i]
+			for (i = start; i <= n; i++) text = text (i > start ? "\n" : "") lines[i]
+			held = n - start + 1; fresh = 0
+		}
+		BEGIN {
+			secrets[1] = ENVIRON["MINDY_SETUP_REDACT_CODE"]; secrets[2] = ENVIRON["MINDY_SETUP_REDACT_SIGNATURE"]
+			gap = "(" ENVIRON["MINDY_SETUP_INVISIBLE"] "|[ \t\r]*\n[ \t\r]*)*"
+			longest = 0
+			for (k = 1; k <= 2; k++) {
+				# A code typed with such a mark inside it is looked for without it, as the text it is in is.
+				gsub(ENVIRON["MINDY_SETUP_INVISIBLE"], "", secrets[k])
+				if (length(secrets[k]) >= 16) { pattern[k] = wrapped(secrets[k]); active = 1; if (length(secrets[k]) > longest) longest = length(secrets[k]) }
+			}
+			quota = 4 * longest + 64
+		}
+		!active { print; next }
+		{ text = (held ? text "\n" : "") $0; held++; if (++fresh >= 100) flush(0) }
+		END { if (active && held) flush(1) }'
 }
 say() { printf '%s\n' "$1" | redact; }
 # curl to MINDY's download server, with the code's Authorization header read from a here-document on
@@ -144,14 +199,13 @@ reason_kept="the reason is kept in setup's stop note on this Mac, in ~/.mindy/se
 reason_not_shown='the reason is not shown here'
 # The gate's own sentences (build-machine-stack src/mindy-gate-rules.js), matched exactly and never
 # relayed: the earlier words, and the words the gate uses since it took the decided wording. The
-# engine's own not-issued sentence is the earlier words, and the engine passes the gate's two earlier
-# code sentences on when the gate refuses its own request.
+# Old gate replies are compared only. The client shows its own setup sentences.
 gate_not_issued_sentence='This code is not one Mike issued. Check the code in Mike'"'"'s message, or ask Mike.'
 gate_not_active_sentence='This code is no longer active. Ask Mike.'
 gate_too_many_sentence='Too many requests. Wait a minute and try again.'
-gate_not_issued_sentence_now="This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then type /mindy with it."
+gate_not_issued_sentence_now="This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then type /install-bwm with it."
 gate_not_active_sentence_now="This MINDY access code is no longer active, so it can't download MINDY."
-gate_too_many_sentence_now="Too many tries from this internet connection in the last minute, so MINDY's download server is pausing for a moment. Wait a minute, then type /mindy with your access code again."
+gate_too_many_sentence_now="Too many tries from this internet connection in the last minute, so MINDY's download server is pausing for a moment. Wait a minute, then type /install-bwm with your access code again."
 # The engine's own sentences for a different code already on this Mac: release 1.0.7 and later, and
 # release 1.0.6.
 engine_different_code_sentence='This Mac already has a different MINDY access code.'
@@ -175,17 +229,46 @@ begin() {
 	if [ -n "$tmp" ]; then exec 2>"$tmp/step.err"; fi
 }
 
+# A name or path as a web address writes it, for the awk programs below: each byte that is not a
+# letter, a digit, a slash or one of . _ ~ - as %xx, in lower case, as those programs compare in lower
+# case. A file address writes a space as %20, and a letter such as the e in Jose with an accent as %xx
+# for each byte of it. Add percent_setup() to BEGIN, then call percent_encode(<text>).
+percent_functions='
+	function percent_setup(    i) { for (i = 1; i < 256; i++) percent_ord[sprintf("%c", i)] = i }
+	function percent_encode(text,    out, i, c) {
+		out = ""
+		for (i = 1; i <= length(text); i++) {
+			c = substr(text, i, 1)
+			out = out (c ~ /[A-Za-z0-9\/._~-]/ ? c : sprintf("%%%02x", percent_ord[c]))
+		}
+		return out
+	}'
+
 # The member's own home folder path, set aside as plain text in any letter case, as a Mac's folders
 # ignore case, and only as a whole path part: where a slash, a space, a quote, punctuation that closes
 # a path, or the end of the line follows it. A longer folder name that begins with it is left as it is.
+# The path is also found as a file address writes it, with %20 for each space and %xx for other
+# characters.
 # set_home_aside <what stands in its place>
 set_home_aside() {
-	MINDY_SETUP_HOME=$home MINDY_SETUP_HOME_AS=$1 LC_ALL=C awk '
-		BEGIN { home = tolower(ENVIRON["MINDY_SETUP_HOME"]); as = ENVIRON["MINDY_SETUP_HOME_AS"]; sub(/\/+$/, "", home) }
+	MINDY_SETUP_HOME=$home MINDY_SETUP_HOME_AS=$1 LC_ALL=C awk "$percent_functions"'
+		BEGIN {
+			percent_setup()
+			home = tolower(ENVIRON["MINDY_SETUP_HOME"]); as = ENVIRON["MINDY_SETUP_HOME_AS"]; sub(/\/+$/, "", home)
+			if (home != "") {
+				spelled[++spellings] = home
+				for (i = 1; i <= 2; i++) {
+					other = i == 1 ? home : percent_encode(home)
+					if (i == 1) gsub(/ /, "%20", other)
+					for (j = 1; j <= spellings && other != spelled[j]; j++);
+					if (j > spellings) spelled[++spellings] = other
+				}
+			}
+		}
 		{
 			line = $0
-			if (home != "") {
-				out = ""
+			for (k = 1; k <= spellings; k++) {
+				home = spelled[k]; out = ""
 				while ((at = index(tolower(line), home)) > 0) {
 					after = substr(line, at + length(home), 1)
 					if (after == "" || after == "\047" || after ~ /[]\/[:space:]":;,)>`}]/) { out = out substr(line, 1, at - 1) as; line = substr(line, at + length(home)) }
@@ -220,18 +303,25 @@ must_not_show() {
 # never leaves the rest of the full name behind. A full name or user name shorter than two characters
 # is left alone, as it could not be told from an ordinary letter.
 without_names() {
-	MINDY_SETUP_NAMES=$member_names LC_ALL=C awk '
+	MINDY_SETUP_NAMES=$member_names LC_ALL=C awk "$percent_functions"'
 		function add(name, k) {
 			for (k = 1; k <= count; k++) if (names[k] == name) return
 			names[++count] = name
 		}
 		BEGIN {
+			percent_setup()
 			split(ENVIRON["MINDY_SETUP_NAMES"], list, "\n")
 			user = tolower(list[1]); full = tolower(list[2])
 			if (length(full) >= 2) add(full)
 			words = split(full, part, /[[:space:]]+/)
 			for (i = 1; i <= words; i++) if (length(part[i]) >= 3) add(part[i])
 			if (length(user) >= 2) add(user)
+			# Each name as a file address writes it as well: %20 for a space, and %xx for other characters.
+			found = count
+			for (i = 1; i <= found; i++) {
+				other = names[i]; gsub(/ /, "%20", other); add(other)
+				add(percent_encode(names[i]))
+			}
 			for (i = 2; i <= count; i++) {
 				name = names[i]
 				for (j = i - 1; j >= 1 && length(names[j]) < length(name); j--) names[j + 1] = names[j]
@@ -254,29 +344,55 @@ without_names() {
 		}'
 }
 
-# Text that is about to leave this Mac: the code and its signature half removed, the member's home
-# folder path replaced with ~, and their names removed.
-for_sending() {
-	redact | set_home_aside '~' | without_names
+# Text from standard input with the marks that show nothing taken out (invisible_marks above), so they
+# cannot hide a name, a path or a code in what leaves this Mac.
+without_invisible() {
+	MINDY_SETUP_INVISIBLE=$invisible_marks LC_ALL=C awk '{ gsub(ENVIRON["MINDY_SETUP_INVISIBLE"], ""); print }'
 }
 
-# Text read from standard input as the inside of a JSON string, at most <bytes> bytes before it is
-# escaped: what must not leave this Mac taken out first, any broken UTF-8 at the cut dropped, control
-# characters other than tab and newline dropped, then \ " tab and newline escaped. Each field's bytes
-# are capped so that the whole report stays inside the download server's 131072 bytes even if every
-# byte had to be escaped.
-# json_text <bytes>
-json_text() {
-	for_sending | head -c "$1" | if command -v iconv >/dev/null 2>&1; then iconv -c -f UTF-8 -t UTF-8 2>/dev/null; else cat; fi \
-		| LC_ALL=C tr -d '\000-\010\013-\037\177' \
+# Text from standard input as it is kept before anything is looked for in it: a Windows line end is
+# one newline and a lone carriage return is a newline, any broken UTF-8 (a byte that is not text, or
+# a mark cut off at its end) is dropped, and control characters other than tab and newline are
+# dropped. All of that happens before redact, never after it, because taking a stray byte out of the
+# middle of a code afterwards would join the code back together once redact had passed over it.
+# plain_text
+plain_text() {
+	LC_ALL=C sed -e "s/$(printf '\r')\$//" | LC_ALL=C tr '\r' '\n' \
+		| if command -v iconv >/dev/null 2>&1; then iconv -c -f UTF-8 -t UTF-8 2>/dev/null; else cat; fi \
+		| LC_ALL=C tr -d '\000-\010\013-\037\177'
+}
+
+# Text that is about to leave this Mac: made plain text, the marks that show nothing dropped, the code
+# and its signature half removed, the member's home folder path replaced with ~, and their names
+# removed.
+for_sending() {
+	plain_text | without_invisible | redact | set_home_aside '~' | without_names
+}
+
+# What for_sending gave, as the inside of a JSON string, at most <bytes> bytes before it is escaped:
+# any broken UTF-8 at the cut dropped, then \ " tab and newline escaped. Each field's bytes are capped
+# so that the whole report stays inside the download server's 131072 bytes even if every byte had to
+# be escaped.
+# json_escaped <bytes>
+json_escaped() {
+	head -c "$1" | if command -v iconv >/dev/null 2>&1; then iconv -c -f UTF-8 -t UTF-8 2>/dev/null; else cat; fi \
 		| LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e "s/$(printf '\t')/\\\\t/g" \
 		| LC_ALL=C awk '{ printf "%s%s", (NR > 1 ? "\\n" : ""), $0 }'
 }
 
-# One line of text as the inside of a JSON string, its line breaks made spaces.
+# Text read from standard input as the inside of a JSON string: what must not leave this Mac taken
+# out first (for_sending), then cut and escaped (json_escaped).
+# json_text <bytes>
+json_text() {
+	for_sending | json_escaped "$1"
+}
+
+# One line of text as the inside of a JSON string, its line breaks made spaces. What must not leave
+# this Mac is taken out before the line breaks become spaces, so a code wrapped across lines is still
+# found.
 # json_line <text> <bytes>
 json_line() {
-	printf '%s' "$1" | tr '\n' ' ' | json_text "$2"
+	printf '%s' "$1" | for_sending | LC_ALL=C awk '{ printf "%s%s", (NR > 1 ? " " : ""), $0 }' | json_escaped "$2"
 }
 
 # Which app is running setup, by the same marks as start_mindy at the top: Claude Code, or Codex, which
@@ -398,11 +514,12 @@ tell() {
 			0)
 				if [ -n "$stop_message" ]; then said_line=$stop_message
 				else said_line="Setup stopped while $step: $(as_sentence "$shown_reason") $details_sent_ending"; fi ;;
-			2) said_line=$unreachable_message ;;
+			2) said_line="Setup stopped while $step: $(as_sentence "$shown_reason") $details_not_taken_ending" ;;
 			3) said_line=$not_issued_message ;;
 			*) said_line="Setup stopped while $step: $(as_sentence "$shown_reason") $details_not_taken_ending" ;;
 		esac
 	fi
+	if [ "$step" = "checking for installed memory" ]; then said_line=$memory_first_message; fi
 	say "$said_line" || :
 	told=true
 	if [ "$note_kept" = true ]; then
@@ -591,6 +708,13 @@ downloads="$home/.mindy/downloads"
 begin 'making a temporary folder'
 if made=$(mktemp -d 2>&1) && [ -d "$made" ]; then tmp=$made; else stop "$(printf '%s\n' "$made" | first_meaningful)"; fi
 
+begin 'checking for installed memory'
+capture_registered=false
+for registration in "$HOME/Library/Application Support/MINDY/memories/"*.json; do
+ if [ -f "$registration" ] && [ ! -L "$registration" ] && grep -q '"role"[[:space:]]*:[[:space:]]*"capture"' "$registration"; then capture_registered=true; break; fi
+done
+[ "$capture_registered" = true ] || stop_saying "$memory_first_message" 'no capture memory is registered on this Mac'
+
 begin "asking MINDY's download server for the latest release"
 packument="$tmp/packument.json"
 if status=$(gate_curl -sS -H 'Accept: application/json' -o "$packument" -w '%{http_code}' 'https://gate.mindy.build/mindy' 2>"$tmp/curl-packument.err"); then :; else
@@ -611,40 +735,129 @@ version_entry=$(sed -n "s/.*\"$version\"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\
 integrity=$(printf '%s\n' "$version_entry" | sed -n 's/.*"integrity"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 case "$integrity" in sha512-*) ;; *) stop "the download server's answer for MINDY $version has no sha512 integrity value" ;; esac
 
+# Enrol only the apps whose command is on this Mac: the install runs `claude --version` or
+# `codex --version` for each one it registers, so an app without its command stops the install.
+# An update keeps the apps recorded when MINDY was installed, and adds only an app that is on this
+# Mac now and that MINDY is not yet set up in (see the check just below).
+begin 'checking for Claude Code and Codex'
+# Each app's command is looked for where that app installs it, not only on PATH, because the shell
+# that runs setup is the shell of whichever app the member typed the command in, and the other app's
+# command may not be on its PATH. This one lookup is used for a first install, an update and an add.
+# Claude Code: on PATH, then ~/.local/bin/claude (its own installer's place, which a Terminal's PATH
+# usually holds and Claude Code's shell may not), then ~/.claude/local/claude (its earlier place).
+# Codex, the ChatGPT app: on PATH, then CODEX_CLI_PATH, which the app sets to its own copy of codex,
+# then that copy where the app keeps it, <Applications>/ChatGPT.app/Contents/Resources/codex-cli/
+# CodexCLI.app/Contents/MacOS/codex, and where an earlier build of the app kept it,
+# <Applications>/Codex.app/Contents/Resources/codex, in /Applications and in ~/Applications. Both
+# were read from the installed app on 4 October 2026. CODEX_CLI_PATH is used only as a whole path,
+# with no ":" that would split it into two PATH entries and no line break that would hide a second
+# path after the first, to an executable file named codex. A found
+# command that is not on PATH gets its folder put at the end of PATH, for this script and the engine
+# it runs, which runs `claude --version` or `codex --version` for each app it registers.
+# MINDY_SETUP_APPLICATIONS_FOLDER names the folder to look in instead of /Applications, which is how a
+# test keeps the Mac it runs on out of its answers.
+# find_app_command <claude|codex> prints the command's full path, or nothing.
+find_app_command() {
+	app_found=$(command -v "$1" 2>/dev/null) || app_found=
+	case "$app_found" in /*) if [ -f "$app_found" ] && [ -x "$app_found" ]; then printf '%s\n' "$app_found"; return 0; fi ;; esac
+	if [ "$1" = claude ]; then
+		app_candidates="$home/.local/bin/claude
+$home/.claude/local/claude"
+	else
+		app_candidates=${CODEX_CLI_PATH:-}
+		case "$app_candidates" in *:*|*'
+'*) app_candidates= ;; /*/codex) ;; *) app_candidates= ;; esac
+		for app_folder in "${MINDY_SETUP_APPLICATIONS_FOLDER:-/Applications}" "$home/Applications"; do
+			app_candidates="${app_candidates:+$app_candidates
+}$app_folder/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex
+$app_folder/Codex.app/Contents/Resources/codex"
+		done
+	fi
+	while IFS= read -r app_candidate; do
+		if [ -n "$app_candidate" ] && [ -f "$app_candidate" ] && [ -x "$app_candidate" ]; then printf '%s\n' "$app_candidate"; return 0; fi
+	done <<APP_CANDIDATES
+$app_candidates
+APP_CANDIDATES
+	return 0
+}
+claude_command=$(find_app_command claude)
+codex_command=$(find_app_command codex)
+for app_command_found in "$claude_command" "$codex_command"; do
+	[ -n "$app_command_found" ] || continue
+	if ! command -v "${app_command_found##*/}" >/dev/null 2>&1; then
+		PATH="$PATH:${app_command_found%/*}"
+		export PATH
+	fi
+done
+
 begin 'checking which MINDY is already here'
 active="$client_root/.mindy/release-selection/active-release.json"
 if [ -f "$active" ]; then active_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$active" | head -n 1); fi
-if [ "$active_version" = "$version" ]; then finished=true; printf '%s\n' 'MINDY is already installed.'; exit 0; fi
 action=install
-if [ -n "$active_version" ]; then action=update; fi
-
-# Enrol only the harnesses whose command is on this Mac: the install runs `claude --version` or
-# `codex --version` for each one it registers, so a harness without its command stops the install.
-# An update keeps the harnesses recorded when MINDY was installed, because the enrol step refuses
-# to change them once a release is active.
-begin 'checking for Claude Code and Codex'
-# The ChatGPT app keeps its codex inside the app and names it in CODEX_CLI_PATH. When no codex is on
-# PATH, that one is put at the end of PATH, for this script and the engine it runs, which runs
-# `codex --version` for each harness it registers. It is used only as a whole path, with no ":" that
-# would split it into two PATH entries, to an executable file named codex.
-app_codex=${CODEX_CLI_PATH:-}
-case "$app_codex" in
-	*:*) app_codex= ;;
-	/*/codex) ;;
-	*) app_codex= ;;
-esac
-if ! command -v codex >/dev/null 2>&1 && [ -n "$app_codex" ] && [ -f "$app_codex" ] && [ -x "$app_codex" ]; then
-	PATH="$PATH:${app_codex%/codex}"
-	export PATH
+if [ -n "$active_version" ]; then
+ action=update
+ details_not_taken_ending="$details_not_taken_ending Open your MINDY folder and type /bwmteam if you need help."
 fi
-if [ "$action" = update ]; then
+if [ "$active_version" = "$version" ]; then
+	# The latest release is already here. An app put on this Mac after MINDY, Claude Code or the
+	# ChatGPT app (Codex), still has no MINDY: the active receipt names the apps MINDY was set up in,
+	# and a receipt that names none is one for both. Each app on this Mac that is not named gets MINDY
+	# by the same steps as an update, with that app added to the ones recorded. With nothing to add,
+	# setup says MINDY is already installed and does nothing else.
+	begin 'checking for Claude Code and Codex'
+	set_up=$(sed -n 's/.*"harnesses"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$active" | head -n 1)
+	set_up_list=
+	if [ -z "$set_up" ]; then set_up_list='claude-code codex'; else
+		case "$set_up" in *'"claude-code"'*) set_up_list='claude-code' ;; esac
+		case "$set_up" in *'"codex"'*) set_up_list="${set_up_list:+$set_up_list }codex" ;; esac
+	fi
+	adding_an_app=false
+	for app in claude-code codex; do
+		app_command=$claude_command
+		if [ "$app" = codex ]; then app_command=$codex_command; fi
+		case " $set_up_list " in
+			*" $app "*) harness_list="${harness_list:+$harness_list }$app" ;;
+			*) if [ -n "$app_command" ] || { [ "$app" = claude-code ] && [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ]; }; then harness_list="${harness_list:+$harness_list }$app"; adding_an_app=true; fi ;;
+		esac
+	done
+ repair_install_record() {
+  begin 'laying MINDY on this Mac'
+  MINDY_INSTALLER_REPORTS=1; export MINDY_INSTALLER_REPORTS
+  withhold_reason=true
+  # The folder's own signed selection supplies the interpreter and repair command.
+  materialized=$(sed -n 's/^.*"materializedReleaseDir":"\([^"]*\)".*$/\1/p' "$active")
+  case "$materialized" in "$client_root"/.mindy/system-releases/*) ;; *) stop "MINDY installed folder has no verified active release" ;; esac
+  set -- "$materialized"/components/mindy-bun-runtime/*/bun
+  [ "$#" -eq 1 ] && [ -x "$1" ] && [ ! -L "$1" ] || stop "MINDY installed folder has no bundled runtime"
+  if "$1" "$materialized/components/mindy-engine/mindy-install/delivery-cli.ts" --repair-install-record --client-root "$client_root" >"$tmp/record-repair.out" 2>&1; then :; else
+   withhold_reason=true; stop "$(reason_of "$tmp/record-repair.out")"
+  fi
+  withhold_reason=false
+ }
+	if [ "$adding_an_app" = false ]; then repair_install_record; finished=true; printf '%s\n' 'MINDY is already installed.'; exit 0; fi
+	# Enrolling grows the record of the apps before the install runs, and the record cannot shrink again.
+	# So nothing is enrolled unless the command of every app in the new list answers --version, as the
+	# install will ask of it. When one does not, nothing is added and setup says what it said before.
+	for app in $harness_list; do
+		app_command=$claude_command
+		if [ "$app" = codex ]; then app_command=$codex_command; fi
+		if [ "$app" = claude-code ] && [ -z "$app_command" ] && [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ]; then continue; fi
+		if [ -z "$app_command" ] || ! "$app_command" --version >/dev/null 2>&1 </dev/null; then repair_install_record; finished=true; printf '%s\n' 'MINDY is already installed.'; exit 0; fi
+	done
+fi
+
+begin 'checking for Claude Code and Codex'
+if [ "$action" = update ] && [ -z "$harness_list" ]; then
 	recorded=$(sed -n 's/.*"harnessIds"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$client_root/.mindy/update-verifier.json" 2>/dev/null | head -n 1)
 	case "$recorded" in *'"claude-code"'*) harness_list='claude-code' ;; esac
 	case "$recorded" in *'"codex"'*) harness_list="${harness_list:+$harness_list }codex" ;; esac
 fi
 if [ -z "$harness_list" ]; then
-	if command -v claude >/dev/null 2>&1; then harness_list='claude-code'; fi
-	if command -v codex >/dev/null 2>&1; then harness_list="${harness_list:+$harness_list }codex"; fi
+	# With no record yet, an app is enrolled only when its command answers --version, as the install
+	# will ask of it, so an app the member does not use never stops their first install. One left out
+	# can be added later by typing the command again.
+	if { [ -n "$claude_command" ] && "$claude_command" --version >/dev/null 2>&1 </dev/null; } || [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ]; then harness_list='claude-code'; fi
+	if [ -n "$codex_command" ] && "$codex_command" --version >/dev/null 2>&1 </dev/null; then harness_list="${harness_list:+$harness_list }codex"; fi
 fi
 harnesses_checked=true
 [ -n "$harness_list" ] || stop "neither claude nor codex is on this Mac's PATH"
@@ -741,13 +954,31 @@ if [ "$enrol_status" != 0 ]; then
 	stop "$enrol_reason" "$enrol_status"
 fi
 
+MINDY_INSTALLER_REPORTS=1
+export MINDY_INSTALLER_REPORTS
 begin 'installing MINDY'
 install="$tmp/install.out"
 if "$bun" "$engine/delivery-cli.ts" --release-signature "$release/release-signature.json" --release-package "$archive" --operation-id "mindy-setup-$(date +%s)-$$" --action "$action" --client-root "$client_root" >"$install" 2>&1; then :; else
 	install_status=$?
 	stop_for_gate_sentence "$install" "$install_status"
-	stop "$(reason_of "$install")" "$install_status"
+	install_reason=$(reason_of "$install")
+ if grep -q 'MINDY_HOME_RUNTIME_LAY_FAILED' "$install"; then begin 'laying MINDY on this Mac'; withhold_reason=true; fi
+	case "$install_reason" in
+		*"Claude Local Code"*|*"Claude Code plugin copy"*|*"MINDY delivery install record"*|*"MINDY installed folder"*|*"Kept release signature does not name this release"*) withhold_reason=true ;;
+	esac
+	stop "$install_reason" "$install_status"
+fi
+
+begin 'laying MINDY on this Mac'
+lay="$tmp/lay.out"
+if "$bun" "$engine/home-runtime-lay.ts" "$client_root" >"$lay" 2>&1; then :; else
+ lay_status=$?
+ withhold_reason=true
+ stop "$(reason_of "$lay")" "$lay_status"
 fi
 
 finished=true
 printf '%s\n' "MINDY is now in $client_root"
+# The engine's receipt says "codexPet":"placed" when MINDY's Codex pet is in the member's pets (an engine
+# from before the pet says nothing). The /install-bwm skill tells the member only when this line is printed.
+if grep -q '"codexPet":"placed"' "$install" 2>/dev/null; then printf '%s\n' "MINDY's Codex pet is in place."; fi

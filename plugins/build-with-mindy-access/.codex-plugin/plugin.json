@@ -1,0 +1,14 @@
+{
+  "name": "build-with-mindy-access",
+  "version": "1.0.0",
+  "description": "Install MINDY with your access code.",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Build With MINDY Setup",
+    "shortDescription": "Install MINDY with your access code.",
+    "developerName": "MINDY",
+    "brandColor": "#0099FF",
+    "composerIcon": "./assets/mindy.png",
+    "logo": "./assets/mindy.png"
+  }
+}

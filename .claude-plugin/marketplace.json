@@ -6,10 +6,6 @@
   "description": "The public MINDY marketplace.",
   "plugins": [
     {
-      "name": "mindy",
-      "source": "./plugins/mindy"
-    },
-    {
       "name": "mindy-timesaver-access",
       "source": "./plugins/mindy-timesaver-access"
     },
@@ -17,6 +13,11 @@
       "name": "timesaver",
       "source": "./plugins/timesaver",
       "displayName": "MINDY TimeSaver"
+    },
+    {
+      "name": "build-with-mindy-access",
+      "source": "./plugins/build-with-mindy-access",
+      "displayName": "Build With MINDY Setup"
     }
   ]
 }
