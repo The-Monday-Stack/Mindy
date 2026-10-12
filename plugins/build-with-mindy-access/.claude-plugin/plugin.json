@@ -1,9 +1,9 @@
 {
   "name": "build-with-mindy-access",
-  "version": "1.0.0",
-  "description": "Install MINDY with your access code.",
+  "version": "1.0.3",
+  "description": "Set up Build With Mindy with your access code.",
   "author": {
     "name": "MINDY"
   },
-  "displayName": "Build With MINDY Setup"
+  "displayName": "Build With Mindy Setup"
 }

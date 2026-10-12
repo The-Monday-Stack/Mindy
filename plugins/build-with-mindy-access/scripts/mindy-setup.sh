@@ -49,13 +49,241 @@ access_code_reason() {
 	esac
 }
 
-memory_first_message='Install MINDY TimeSaver first. Open Plugins, add MINDY TimeSaver Setup from mindy-plugin, and type /install-mts with your access code. When it has finished, type /install-bwm with your code again.'
+code_from_chat_message="Setup could not read your code from this chat. Start a new chat and type /install-bwm with your code there."
+chat_reader_repair_message="MINDY TimeSaver needs repairing. Install MINDY TimeSaver again with /install-mts and your TimeSaver access code, then $start_mindy with your code again."
 
-# The code comes on standard input, first line, after --code-on-stdin, so it is not in this script's
-# arguments for the process list to show. --code <code> still works, for a skill written before that.
+memory_first_message='Install MINDY TimeSaver first. Add MINDY TimeSaver Setup where you add plugins, and type /install-mts with your access code. When it has finished, type /install-bwm with your code again.'
+case "${CODEX_INTERNAL_ORIGINATOR_OVERRIDE:-}" in
+ *ChatGPT*) memory_first_message='Install MINDY TimeSaver first. Open Customize, then Plugins, then Personal, click + beside MINDY TimeSaver Setup, and type /install-mts with your access code. When it has finished, type /install-bwm with your code again.' ;;
+ *) if [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ]; then
+  memory_first_message='Install MINDY TimeSaver first. On the speech-bubble side of the Claude app, open Customize, then Plugins, then Discover, add MINDY TimeSaver Setup, and type /install-mts with your access code on the Local Code side. When it has finished, type /install-bwm with your code again.'
+ else
+  for setup_option in "$@"; do
+   if [ "$setup_option" = --claude-local ]; then
+    memory_first_message='Install MINDY TimeSaver first. On the speech-bubble side of the Claude app, open Customize, then Plugins, then Discover, add MINDY TimeSaver Setup, and type /install-mts with your access code on the Local Code side. When it has finished, type /install-bwm with your code again.'
+   fi
+  done
+ fi ;;
+esac
+
+# These guards also protect a direct invocation, before any temporary folder, report or network call.
+# The stdin route remains for the internal installer tests and update caller, never for an AI tool.
+if [ -n "${HOME:-}" ]; then
+ capture_registered=false
+ for registration in "${HOME:-}/Library/Application Support/MINDY/memories/"*.json; do
+  if [ -f "$registration" ] && [ ! -L "$registration" ] && grep -q '"role"[[:space:]]*:[[:space:]]*"capture"' "$registration"; then capture_registered=true; break; fi
+ done
+ [ "$capture_registered" = true ] || { printf '%s\n' "$memory_first_message"; exit 0; }
+fi
+if [ "$#" -eq 0 ]; then
+ installed_root="${HOME:-}/mindy"
+ install_record="${HOME:-}/.mindy/install-state.json"
+ if [ -f "$install_record" ] && [ ! -L "$install_record" ] && grep -q '"format"[[:space:]]*:[[:space:]]*"mindy.delivery-install-state.v1"' "$install_record"; then
+  recorded_root=$(sed -n 's/.*"baseRoot"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$install_record" | head -n 1)
+  case "$recorded_root" in /*) installed_root=$recorded_root ;; esac
+ fi
+ installed_active="$installed_root/.mindy/release-selection/active-release.json"
+ if [ -f "$installed_active" ] && [ ! -L "$installed_active" ] && grep -q '"version"[[:space:]]*:[[:space:]]*"[^"]\{1,\}"' "$installed_active"; then
+  printf '%s\n' 'MINDY is already installed.'; exit 0
+ fi
+fi
+
+# Locate only this host's current session, as mindysave does. The reader writes its answer
+# into this shell's private command substitution, never the tool's output or a temporary file.
+code_from_current_chat() {
+ chat_bun="${MTS_STATE_ROOT:-${HOME:-}/.timesaver}/bin/bun"
+ if [ -f "$chat_bun" ] && [ ! -L "$chat_bun" ] && [ -x "$chat_bun" ] && BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 "$chat_bun" -e 'process.exit(0)' >/dev/null 2>&1; then
+  chat_native=false
+  set -- "$chat_bun" - "$@"
+ elif [ -x /usr/bin/osascript ] && /usr/bin/osascript -l JavaScript -e '1' >/dev/null 2>&1; then
+  chat_native=true
+  set -- /usr/bin/osascript -l JavaScript - "$@"
+ else
+  return 3
+ fi
+ run_chat_reader() {
+ # Reading a chat must not leave Bun's compiled source cache in the person's home.
+ BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 "$@" 2>/dev/null <<'BWM_CURRENT_CHAT'
+// One reader for Bun and macOS JavaScript for Automation, with no downloaded code.
+var nativeReader = typeof process === "undefined";
+if (nativeReader) ObjC.import("Foundation");
+function run(options) {
+ var fs = nativeReader ? null : require("node:fs");
+ var fm = nativeReader ? $.NSFileManager.defaultManager : null;
+ function env(name) {
+  if (!nativeReader) return process.env[name] || "";
+  var value = $.NSProcessInfo.processInfo.environment.objectForKey(name);
+  return value.isNil() ? "" : ObjC.unwrap(value);
+ }
+ function attributes(file) {
+  var info = fm.attributesOfItemAtPathError(file, null);
+  if (info.isNil()) throw new Error();
+  return info;
+ }
+ function directory(file) {
+  try { return nativeReader ? ObjC.unwrap(attributes(file).objectForKey($.NSFileType)) === "NSFileTypeDirectory" : fs.lstatSync(file).isDirectory(); }
+  catch (_) { return false; }
+ }
+ function children(folder) {
+  if (!directory(folder)) return [];
+  var names = nativeReader ? ObjC.deepUnwrap(fm.contentsOfDirectoryAtPathError(folder, null)) : fs.readdirSync(folder);
+  return names.map(function(name) { return folder + "/" + name; });
+ }
+ function regular(file) {
+  if (nativeReader) {
+   var info = attributes(file);
+   if (ObjC.unwrap(info.objectForKey($.NSFileType)) !== "NSFileTypeRegular" || !(Number(ObjC.unwrap(info.objectForKey($.NSFilePosixPermissions))) & 0o444)) throw new Error();
+  } else {
+   var stat = fs.lstatSync(file);
+   if (!stat.isFile() || !(stat.mode & 0o444)) throw new Error();
+  }
+ }
+ // The compatibility scan opens at most 100 metadata rows, each capped at 64 KiB.
+ function read(file, maximum) {
+  regular(file);
+  if (nativeReader) {
+   if (!maximum) {
+    var value = $.NSString.stringWithContentsOfFileEncodingError(file, $.NSUTF8StringEncoding, null);
+    if (value.isNil()) throw new Error();
+    return ObjC.unwrap(value);
+   }
+   var handle = $.NSFileHandle.fileHandleForReadingAtPath(file);
+   if (handle.isNil()) throw new Error();
+   try {
+    var bytes = handle.readDataOfLength(maximum);
+    var plain = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(bytes, $.NSISOLatin1StringEncoding));
+    var newline = plain.indexOf("\n");
+    if (newline < 0 && plain.length === maximum) throw new Error();
+    var first = newline < 0 ? bytes : bytes.subdataWithRange($.NSMakeRange(0, newline));
+    var decoded = $.NSString.alloc.initWithDataEncoding(first, $.NSUTF8StringEncoding);
+    if (decoded.isNil()) throw new Error();
+    return ObjC.unwrap(decoded);
+   } finally { handle.closeFile; }
+  }
+  if (!maximum) return fs.readFileSync(file, "utf8");
+  var fd = fs.openSync(file, "r");
+  try {
+   var buffer = Buffer.alloc(maximum), length = fs.readSync(fd, buffer, 0, maximum, null);
+   var end = buffer.subarray(0, length).indexOf(10);
+   if (end < 0 && length === maximum) throw new Error();
+   return buffer.subarray(0, end < 0 ? length : end).toString("utf8");
+  } finally { fs.closeSync(fd); }
+ }
+ function records(file) {
+  return read(file).split(/\r?\n/).filter(function(line) { return line.trim(); }).map(function(line) {
+   var row = JSON.parse(line);
+   if (!row || typeof row !== "object" || Array.isArray(row)) throw new Error();
+   return row;
+  });
+ }
+ function text(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.filter(function(block) { return block && ["text", "input_text"].indexOf(block.type) >= 0 && typeof block.text === "string"; }).map(function(block) { return block.text; }).join("\n");
+ }
+ function sessionFiles(folder) {
+  var files = [];
+  children(folder).forEach(function(file) {
+   if (directory(file)) files = files.concat(sessionFiles(file));
+   else if (/\.jsonl$/.test(file)) files.push(file);
+  });
+  return files;
+ }
+ try {
+  var explicit;
+  for (var i = 0; i < options.length; i++) {
+   if (options[i] === "--session-id" && !explicit) explicit = options[++i];
+   else if (options[i] !== "--claude-local") throw new Error();
+  }
+  var claude = !!(env("CLAUDECODE") || env("CLAUDE_CODE_SESSION_ID") || env("CLAUDE_SESSION_ID"));
+  var session = explicit || (claude ? env("CLAUDE_CODE_SESSION_ID") || env("CLAUDE_SESSION_ID") : env("CODEX_THREAD_ID") || env("CODEX_SESSION_ID"));
+  if (!session || !/^[A-Za-z0-9_-]+$/.test(session)) throw new Error();
+  var files, rows, messages;
+  if (claude) {
+   var projects = (env("CLAUDE_CONFIG_DIR") || env("HOME") + "/.claude") + "/projects";
+   files = children(projects).filter(directory).map(function(folder) { return folder + "/" + session + ".jsonl"; }).filter(function(file) {
+    return nativeReader ? fm.fileExistsAtPath(file) : fs.existsSync(file);
+   });
+   if (files.length !== 1) throw new Error();
+   rows = records(files[0]);
+   if (!rows.some(function(row) { return row.sessionId === session && row.message && typeof row.message.role === "string"; })) throw new Error();
+   // A resumed file can retain earlier session rows. They cannot supply this session's code.
+   messages = rows.filter(function(row) { return row.sessionId === session && row.message && row.message.role === "user"; }).map(function(row) { return row.message; });
+  } else {
+   var codex = env("CODEX_HOME") || env("HOME") + "/.codex";
+   if (codex.charAt(0) !== "/") throw new Error();
+   var all = sessionFiles(codex + "/sessions");
+   files = all.filter(function(file) {
+    var name = file.slice(file.lastIndexOf("/") + 1);
+    return name.indexOf("rollout-") === 0 && name.slice(-session.length - 7) === "-" + session + ".jsonl";
+   });
+   if (!files.length) {
+    all.sort().reverse().slice(0, 100).forEach(function(file) {
+     try {
+      var first = JSON.parse(read(file, 65536));
+      if (first.type === "session_meta" && first.payload && first.payload.id === session) files.push(file);
+     } catch (_) { /* Another chat's incomplete metadata cannot supply this chat's code. */ }
+    });
+   }
+   if (files.length !== 1) throw new Error();
+   rows = records(files[0]);
+   var metas = rows.filter(function(row) { return row.type === "session_meta"; });
+   if (metas.length !== 1 || !metas[0].payload || metas[0].payload.id !== session || rows[0] !== metas[0]) throw new Error();
+   messages = rows.filter(function(row) { return row.type === "response_item" && row.payload && row.payload.type === "message" && row.payload.role === "user"; }).map(function(row) { return row.payload; });
+  }
+  var latest = "";
+  var command = /^(?:\/(?:[A-Za-z0-9_-]+:)?install-bwm(?:\s|$)|\[\$?(?:[A-Za-z0-9_-]+:)?install-bwm\]\([^\n]*?\/install-bwm\/SKILL\.md\)(?:\s|$))|<command-name>\/(?:[A-Za-z0-9_-]+:)?install-bwm<\/command-name>/;
+  messages.forEach(function(message) {
+   var value = text(message.content).trim(), found = "", match;
+   var pattern = /(^|[^A-Za-z0-9_.-])([A-Za-z0-9-]{3,32}\.[A-Za-z0-9_-]{86})(?=\.*(?:[^A-Za-z0-9_.-]|$))/g;
+   while ((match = pattern.exec(value))) found = match[2];
+   if (found) latest = found;
+   // A new install invocation without a code must not silently reuse an earlier one.
+   else if (command.test(value)) latest = "";
+  });
+  return latest || "BWM_CHAT_NO_CODE";
+ } catch (_) { return "BWM_CHAT_UNREADABLE"; }
+}
+if (!nativeReader) process.stdout.write(run(process.argv.slice(2)));
+BWM_CURRENT_CHAT
+ }
+ if chat_answer=$(run_chat_reader "$@") && [ -n "$chat_answer" ]; then :
+ elif [ "$chat_native" = false ]; then
+  # A damaged runtime can pass its probe and still fail to run the stdin reader.
+  shift 2
+  [ -x /usr/bin/osascript ] && /usr/bin/osascript -l JavaScript -e '1' >/dev/null 2>&1 || return 3
+  chat_answer=$(run_chat_reader /usr/bin/osascript -l JavaScript - "$@") || return 3
+ else
+  return 3
+ fi
+ case "$chat_answer" in
+  BWM_CHAT_NO_CODE) return 2 ;;
+  BWM_CHAT_UNREADABLE) return 1 ;;
+  '') return 3 ;;
+  *) printf '%s' "$chat_answer" ;;
+ esac
+}
+
+# The AI calls only --code-from-chat. It never supplies the secret in command text or tool stdin.
 code=
 if [ "${1:-}" = "--code-on-stdin" ]; then code=$(sed -n '1p' | tr -d ' \t\r') || code=
-elif [ "${1:-}" = "--code" ] && [ "${2:-}" != "" ]; then code=$2; fi
+elif [ "${1:-}" = "--code-from-chat" ]; then
+ shift
+ chat_status=0
+ code=$(code_from_current_chat "$@") || chat_status=$?
+ # The app may not have written the message or finished its JSON row yet.
+ if [ "$chat_status" = 1 ] || [ "$chat_status" = 2 ]; then
+  sleep 0.2
+  chat_status=0
+  code=$(code_from_current_chat "$@") || chat_status=$?
+ fi
+ case "$chat_status" in
+  0) ;;
+  2) printf '%s\n' "$no_code_message"; exit 0 ;;
+  3) printf '%s\n' "$chat_reader_repair_message"; exit 0 ;;
+  *) printf '%s\n' "$code_from_chat_message"; exit 0 ;;
+ esac
+fi
 if [ -z "$code" ]; then printf '%s\n' "$no_code_message"; exit 0; fi
 # Only the identified Local Code skill route enables records without the CLI.
 for setup_option in "$@"; do
@@ -929,17 +1157,45 @@ actual_bun_digest="sha256:$(shasum -a 256 "$bun" 2>"$tmp/shasum-bun.err" | sed '
 begin 'getting the MINDY runtime ready'
 if chmod 700 "$bun" 2>"$tmp/chmod.err"; then :; else chmod_status=$?; stop "$(reason_of "$tmp/chmod.err")" "$chmod_status"; fi
 
+# This verifier belongs to setup, not the download. It loads only Bun built-ins.
+# Check the whole engine, including unlisted files, before any downloaded source loads.
+if (cd "$tmp" && "$bun" -e '
+ const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
+ const [release, componentId, firstScript] = process.argv.slice(1);
+ const manifest = JSON.parse(fs.readFileSync(path.join(release, "release-manifest.json"), "utf8"));
+ const components = manifest.components.filter(item => item.componentId === componentId);
+ if (components.length !== 1 || components[0].representations.length !== 1) process.exit(1);
+ const inventory = components[0].representations[0].inventory;
+ const expected = new Map();
+ for (const entry of inventory) {
+  if (typeof entry.path !== "string" || entry.path.includes("\\") || entry.path.split("/").some(part => !part || part === "." || part === "..") || path.isAbsolute(entry.path)) process.exit(1);
+  if (!/^sha256:[a-f0-9]{64}$/.test(entry.fileDigest) || expected.has(entry.path)) process.exit(1);
+  expected.set(entry.path, entry.fileDigest);
+ }
+ if (!expected.has(firstScript)) process.exit(1);
+ const root = path.join(release, "components", componentId);
+ if (!fs.lstatSync(path.join(release, "components")).isDirectory() || !fs.lstatSync(root).isDirectory()) process.exit(1);
+ const seen = new Set();
+ function walk(directory, prefix) {
+  for (const name of fs.readdirSync(directory)) {
+   const file = path.join(directory, name), relative = prefix + name, info = fs.lstatSync(file);
+   if (info.isDirectory()) { walk(file, relative + "/"); continue; }
+   if (!info.isFile() || !expected.has(relative)) process.exit(1);
+   const digest = "sha256:" + crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+   if (digest !== expected.get(relative)) process.exit(1);
+   seen.add(relative);
+  }
+ }
+ walk(root, "");
+ if (seen.size !== expected.size) process.exit(1);
+' "$release" mindy-engine mindy-install/delivery-credential-cli.ts) >/dev/null 2>&1; then :; else stop_saying "$unsigned_message" 'the engine files in the download do not match the signed manifest'; fi
+
 engine="$release/components/mindy-engine/mindy-install"
 begin 'saving your access code on this Mac'
 enrol="$tmp/enrol.out"
 # The code reaches the engine on standard input, written by printf, which is part of this shell, so no
-# program's arguments hold it and the Mac's list of running programs never shows it. An engine from
-# before 3 October 2026 reads the code only as an argument, so one of those is still given it that way.
-if grep -q -e '--membership-code-on-stdin' "$engine/delivery-credential-cli.ts" 2>/dev/null; then
-	if printf '%s\n' "$code" | "$bun" "$engine/delivery-credential-cli.ts" bootstrap-with-code --membership-code-on-stdin --client-root "$client_root" "$@" >"$enrol" 2>&1; then enrol_status=0; else enrol_status=$?; fi
-else
-	if "$bun" "$engine/delivery-credential-cli.ts" bootstrap-with-code --membership-code "$code" --client-root "$client_root" "$@" >"$enrol" 2>&1; then enrol_status=0; else enrol_status=$?; fi
-fi
+# program's arguments hold it and the Mac's list of running programs never shows it.
+if printf '%s\n' "$code" | "$bun" "$engine/delivery-credential-cli.ts" bootstrap-with-code --membership-code-on-stdin --client-root "$client_root" "$@" >"$enrol" 2>&1; then enrol_status=0; else enrol_status=$?; fi
 if [ "$enrol_status" != 0 ]; then
 	message=$(sed -n '1p' "$enrol")
 	# The engine's own sentences, matched exactly. Release 1.0.6 has the older different-code sentence.
@@ -978,7 +1234,7 @@ if "$bun" "$engine/home-runtime-lay.ts" "$client_root" >"$lay" 2>&1; then :; els
 fi
 
 finished=true
-printf '%s\n' "MINDY is now in $client_root"
+printf '%s\n' 'Build With Mindy is now in a folder called mindy in your home folder.'
 # The engine's receipt says "codexPet":"placed" when MINDY's Codex pet is in the member's pets (an engine
 # from before the pet says nothing). The /install-bwm skill tells the member only when this line is printed.
 if grep -q '"codexPet":"placed"' "$install" 2>/dev/null; then printf '%s\n' "MINDY's Codex pet is in place."; fi
