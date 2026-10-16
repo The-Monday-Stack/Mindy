@@ -23,255 +23,184 @@ start_mindy_capital="$(printf '%s' "$start_mindy" | cut -c 1 | tr '[:lower:]' '[
 # other words. "MINDY has already been sent the details" is printed only when MINDY's download server
 # took the stop report; otherwise the unreachable message or the not-taken ending is printed instead.
 no_code_message="This needs your MINDY access code, which came in the message with your install steps. $start_mindy_capital, a space and your code, all on one line."
-not_issued_message="This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then $start_mindy with it."
-not_active_message="This MINDY access code is no longer active, so it can't download MINDY. MINDY has sent Mike the details."
-different_code_message="This Mac already has a different MINDY access code saved, and MINDY uses one code per Mac. $start_mindy_capital with that earlier code. MINDY has already been sent the details, in case you no longer have it."
-unsigned_message="This download is not a signed MINDY release, so setup stopped before installing anything, to keep your Mac safe. MINDY has sent Mike the details. Check you're on your usual internet connection, then $start_mindy with your access code again."
-too_many_message="Too many tries from this internet connection in the last minute, so MINDY's download server is pausing for a moment. Wait a minute, then $start_mindy with your access code again."
-unreachable_message="Setup could not reach MINDY's download server, so MINDY could not be sent the details. Check you are online, then $start_mindy with your access code again."
-# Any other stop is "Setup stopped while <step>: <reason>." and one of these two endings.
-details_sent_ending="MINDY has sent Mike the details. $start_mindy_capital with your access code to try again."
-details_not_taken_ending="MINDY could not send Mike the details. Check you are online, then $start_mindy with your access code to try again."
+not_issued_message="That looks like a MINDY TimeSaver code. The two products have different codes, so nothing was installed. $start_mindy_capital with your Build With Mindy access code."
+not_active_message="This access code has been switched off, so it can't install Build With Mindy any more. You've typed it right - it's the code itself that isn't active. We have the details, so we can see what happened. If you've got a newer code, $start_mindy with that one, and if not, message the BWM group and let us know."
+different_code_message="This computer already has a different MINDY access code saved, and MINDY uses one code per computer. We have the details, so we can see what happened. $start_mindy_capital with that earlier code, and if you can't find it, don't stress - message the BWM group and let us know."
+unsigned_message="This install package is not a signed MINDY release, so setup stopped before installing anything, to keep this computer safe. We have the details, so we can see what happened. Check you're on your usual internet connection, then $start_mindy with your access code again."
+too_many_message="Too many tries from this internet connection in the last minute, so MINDY's setup server is pausing for a moment. Wait a minute, then $start_mindy with your access code again."
+unreachable_message="Setup could not reach MINDY's setup server, so we could not receive the details. Check you are online, then $start_mindy with your access code again."
+# The three causes above that say we have the details, for when their details did not reach us: the
+# same fixed words for the cause, an ending that says we did not receive the details, and the next step
+# that fits the cause. A code that is no longer active cannot work on a retry, so that member is told
+# to message us in the group, as the different-code stop does, instead of being told to try again.
+not_active_unsent_message="This MINDY access code is no longer active, so it cannot install Build With Mindy. We could not receive the details, so message the BWM group and let us know what happened."
+different_code_unsent_message="This computer already has a different MINDY access code saved, and MINDY uses one code per computer. We could not receive the details. $start_mindy_capital with that earlier code, and if you can't find it, don't stress - message the BWM group and let us know."
+unsigned_unsent_message="This install package is not a signed MINDY release, so setup stopped before installing anything, to keep this computer safe. We could not receive the details. Check you're on your usual internet connection, then $start_mindy with your access code again."
+# Any other stop is setup's own sentence for the step, "Setup stopped while <step>.", then at most one
+# line for a cause the member can fix, then one of these two endings. A tool's or the engine's own
+# words are never shown (decision 2245384): they go only to the private stop note and the stop report.
+details_sent_ending="We have the details, so we can see what happened. $start_mindy_capital with your access code to try again."
+details_not_taken_ending="We could not receive the details. Check you are online, then $start_mindy with your access code to try again."
 interrupted_message="Setup stopped because it was interrupted. $start_mindy_capital with your access code to start again."
+# The two causes a member can fix themselves, each said only when setup recognises it for certain
+# (fixable_line below). No other cause adds a line.
+no_space_line="There's no space left on this computer, so free some up first."
+no_internet_line="This computer isn't connected to the internet right now."
 
-# The <reason> in "Setup stopped while saving your access code on this Mac: <reason>." for each case
-# the engine names when saving the code stops (mindy-install/delivery-credential-cli.ts,
-# AccessCodeStopCase). The engine's own code and detail go only to the stop note and the stop report.
-# A case not listed here, and an engine from before the cases, gets reason_kept below instead.
-# access_code_reason <case>
-access_code_reason() {
-	case "$1" in
-		keychain-out-of-reach-and-file-not-written) printf '%s\n' "this Mac's password store did not take your code, and the private file for your code could not be written either" ;;
-		saved-code-file-not-private) printf '%s\n' "the file that holds your code on this Mac is not private to your Mac account, so setup will not use it" ;;
-		saved-code-unreadable) printf '%s\n' "the access code already saved on this Mac could not be read back" ;;
-		setup-record-not-written) printf '%s\n' "setup could not write its record of your code in your MINDY folder" ;;
-		setup-record-unreadable) printf '%s\n' "setup could not read its record of your code in your MINDY folder" ;;
-	esac
-}
+memory_first_message='Install MINDY TimeSaver first. Add MINDY TimeSaver Setup where you add plugins, and type /install-mts with your TimeSaver access code. When it has finished, type /install-bwm with your Build With Mindy code again.'
+chat_unreadable_message='We could not read your code from this chat. Start a new chat and type /install-bwm with your code there.'
+chat_reader_missing_message='MINDY TimeSaver needs repairing before we can read your code. Type /install-mts with your TimeSaver access code, then try /install-bwm again.'
+# A chosen update, repair or add-app step asks for the code alone: typing /install-bwm again would only
+# bring back the already-installed sentence and the choice.
+chosen_no_code_message='This needs your MINDY access code, which came in the message with your install steps. Type your code on its own and send it.'
+chosen_not_a_code_message="This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then send it on its own."
 
-code_from_chat_message="Setup could not read your code from this chat. Start a new chat and type /install-bwm with your code there."
-chat_reader_repair_message="MINDY TimeSaver needs repairing. Install MINDY TimeSaver again with /install-mts and your TimeSaver access code, then $start_mindy with your code again."
-
-memory_first_message='Install MINDY TimeSaver first. Add MINDY TimeSaver Setup where you add plugins, and type /install-mts with your access code. When it has finished, type /install-bwm with your code again.'
-case "${CODEX_INTERNAL_ORIGINATOR_OVERRIDE:-}" in
- *ChatGPT*) memory_first_message='Install MINDY TimeSaver first. Open Customize, then Plugins, then Personal, click + beside MINDY TimeSaver Setup, and type /install-mts with your access code. When it has finished, type /install-bwm with your code again.' ;;
- *) if [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ]; then
-  memory_first_message='Install MINDY TimeSaver first. On the speech-bubble side of the Claude app, open Customize, then Plugins, then Discover, add MINDY TimeSaver Setup, and type /install-mts with your access code on the Local Code side. When it has finished, type /install-bwm with your code again.'
- else
-  for setup_option in "$@"; do
-   if [ "$setup_option" = --claude-local ]; then
-    memory_first_message='Install MINDY TimeSaver first. On the speech-bubble side of the Claude app, open Customize, then Plugins, then Discover, add MINDY TimeSaver Setup, and type /install-mts with your access code on the Local Code side. When it has finished, type /install-bwm with your code again.'
-   fi
-  done
- fi ;;
-esac
-
-# These guards also protect a direct invocation, before any temporary folder, report or network call.
-# The stdin route remains for the internal installer tests and update caller, never for an AI tool.
+# Keep the no-write checks here too for direct calls. The skill performs its own ordinary reads first.
+setup_app=claude-code
+if [ -z "${CLAUDECODE:-}${CLAUDE_CODE_SESSION_ID:-}${CLAUDE_SESSION_ID:-}" ] && [ -n "${CODEX_THREAD_ID:-}${CODEX_INTERNAL_ORIGINATOR_OVERRIDE:-}${CODEX_CLI_PATH:-}" ]; then setup_app=codex; fi
+chosen_action=
+previous_option=
+for setup_option in "$@"; do
+ case "$previous_option" in --app) setup_app=$setup_option ;; --chosen-action) chosen_action=$setup_option ;; esac
+ [ "$setup_option" != --claude-local ] || { MINDY_CLAUDE_LOCAL=1; export MINDY_CLAUDE_LOCAL; }
+ previous_option=$setup_option
+done
 if [ -n "${HOME:-}" ]; then
  capture_registered=false
- for registration in "${HOME:-}/Library/Application Support/MINDY/memories/"*.json; do
-  if [ -f "$registration" ] && [ ! -L "$registration" ] && grep -q '"role"[[:space:]]*:[[:space:]]*"capture"' "$registration"; then capture_registered=true; break; fi
+ for registration in "$HOME/Library/Application Support/MINDY/memories/"*.json; do
+  if [ -f "$registration" ] && [ ! -L "$registration" ] && [ "$(/usr/bin/plutil -extract role raw -o - "$registration" 2>/dev/null)" = capture ]; then capture_registered=true; break; fi
  done
  [ "$capture_registered" = true ] || { printf '%s\n' "$memory_first_message"; exit 0; }
-fi
-if [ "$#" -eq 0 ]; then
- installed_root="${HOME:-}/mindy"
- install_record="${HOME:-}/.mindy/install-state.json"
- if [ -f "$install_record" ] && [ ! -L "$install_record" ] && grep -q '"format"[[:space:]]*:[[:space:]]*"mindy.delivery-install-state.v1"' "$install_record"; then
-  recorded_root=$(sed -n 's/.*"baseRoot"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$install_record" | head -n 1)
-  case "$recorded_root" in /*) installed_root=$recorded_root ;; esac
- fi
- installed_active="$installed_root/.mindy/release-selection/active-release.json"
- if [ -f "$installed_active" ] && [ ! -L "$installed_active" ] && grep -q '"version"[[:space:]]*:[[:space:]]*"[^"]\{1,\}"' "$installed_active"; then
-  printf '%s\n' 'MINDY is already installed.'; exit 0
+ if { [ "${1:-}" = --code-from-chat ] || [ "$#" -eq 0 ]; } && [ -z "$chosen_action" ]; then
+  # The same folder the install, update, repair and add-app steps below use (client_root).
+  installed_active="$HOME/mindy/.mindy/release-selection/active-release.json"
+  if [ -f "$installed_active" ] && [ ! -L "$installed_active" ] && [ -n "$(/usr/bin/plutil -extract version raw -o - "$installed_active" 2>/dev/null)" ]; then
+   recorded_apps=$(/usr/bin/plutil -extract harnesses json -o - "$installed_active" 2>/dev/null) || recorded_apps=
+   if [ -z "$recorded_apps" ] || [ "$(/usr/bin/plutil -extract harnesses raw -o - "$installed_active" 2>/dev/null)" = 0 ] || printf '%s' "$recorded_apps" | grep -q "\"$setup_app\""; then
+    printf '%s\n' 'MINDY is already installed.'; exit 0
+   fi
+  fi
  fi
 fi
 
-# Locate only this host's current session, as mindysave does. The reader writes its answer
-# into this shell's private command substitution, never the tool's output or a temporary file.
+# The code stays in this process. Bun writes into command substitution, not a tool result or file.
 code_from_current_chat() {
  chat_bun="${MTS_STATE_ROOT:-${HOME:-}/.timesaver}/bin/bun"
- if [ -f "$chat_bun" ] && [ ! -L "$chat_bun" ] && [ -x "$chat_bun" ] && BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 "$chat_bun" -e 'process.exit(0)' >/dev/null 2>&1; then
-  chat_native=false
-  set -- "$chat_bun" - "$@"
- elif [ -x /usr/bin/osascript ] && /usr/bin/osascript -l JavaScript -e '1' >/dev/null 2>&1; then
-  chat_native=true
-  set -- /usr/bin/osascript -l JavaScript - "$@"
- else
-  return 3
- fi
- run_chat_reader() {
- # Reading a chat must not leave Bun's compiled source cache in the person's home.
- BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 "$@" 2>/dev/null <<'BWM_CURRENT_CHAT'
-// One reader for Bun and macOS JavaScript for Automation, with no downloaded code.
-var nativeReader = typeof process === "undefined";
-if (nativeReader) ObjC.import("Foundation");
-function run(options) {
- var fs = nativeReader ? null : require("node:fs");
- var fm = nativeReader ? $.NSFileManager.defaultManager : null;
- function env(name) {
-  if (!nativeReader) return process.env[name] || "";
-  var value = $.NSProcessInfo.processInfo.environment.objectForKey(name);
-  return value.isNil() ? "" : ObjC.unwrap(value);
- }
- function attributes(file) {
-  var info = fm.attributesOfItemAtPathError(file, null);
-  if (info.isNil()) throw new Error();
-  return info;
- }
- function directory(file) {
-  try { return nativeReader ? ObjC.unwrap(attributes(file).objectForKey($.NSFileType)) === "NSFileTypeDirectory" : fs.lstatSync(file).isDirectory(); }
-  catch (_) { return false; }
- }
- function children(folder) {
-  if (!directory(folder)) return [];
-  var names = nativeReader ? ObjC.deepUnwrap(fm.contentsOfDirectoryAtPathError(folder, null)) : fs.readdirSync(folder);
-  return names.map(function(name) { return folder + "/" + name; });
- }
- function regular(file) {
-  if (nativeReader) {
-   var info = attributes(file);
-   if (ObjC.unwrap(info.objectForKey($.NSFileType)) !== "NSFileTypeRegular" || !(Number(ObjC.unwrap(info.objectForKey($.NSFilePosixPermissions))) & 0o444)) throw new Error();
-  } else {
-   var stat = fs.lstatSync(file);
-   if (!stat.isFile() || !(stat.mode & 0o444)) throw new Error();
-  }
- }
- // The compatibility scan opens at most 100 metadata rows, each capped at 64 KiB.
- function read(file, maximum) {
-  regular(file);
-  if (nativeReader) {
-   if (!maximum) {
-    var value = $.NSString.stringWithContentsOfFileEncodingError(file, $.NSUTF8StringEncoding, null);
-    if (value.isNil()) throw new Error();
-    return ObjC.unwrap(value);
-   }
-   var handle = $.NSFileHandle.fileHandleForReadingAtPath(file);
-   if (handle.isNil()) throw new Error();
-   try {
-    var bytes = handle.readDataOfLength(maximum);
-    var plain = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(bytes, $.NSISOLatin1StringEncoding));
-    var newline = plain.indexOf("\n");
-    if (newline < 0 && plain.length === maximum) throw new Error();
-    var first = newline < 0 ? bytes : bytes.subdataWithRange($.NSMakeRange(0, newline));
-    var decoded = $.NSString.alloc.initWithDataEncoding(first, $.NSUTF8StringEncoding);
-    if (decoded.isNil()) throw new Error();
-    return ObjC.unwrap(decoded);
-   } finally { handle.closeFile; }
-  }
-  if (!maximum) return fs.readFileSync(file, "utf8");
-  var fd = fs.openSync(file, "r");
-  try {
-   var buffer = Buffer.alloc(maximum), length = fs.readSync(fd, buffer, 0, maximum, null);
-   var end = buffer.subarray(0, length).indexOf(10);
-   if (end < 0 && length === maximum) throw new Error();
-   return buffer.subarray(0, end < 0 ? length : end).toString("utf8");
-  } finally { fs.closeSync(fd); }
- }
- function records(file) {
-  return read(file).split(/\r?\n/).filter(function(line) { return line.trim(); }).map(function(line) {
-   var row = JSON.parse(line);
-   if (!row || typeof row !== "object" || Array.isArray(row)) throw new Error();
-   return row;
-  });
- }
- function text(content) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content.filter(function(block) { return block && ["text", "input_text"].indexOf(block.type) >= 0 && typeof block.text === "string"; }).map(function(block) { return block.text; }).join("\n");
- }
- function sessionFiles(folder) {
-  var files = [];
-  children(folder).forEach(function(file) {
-   if (directory(file)) files = files.concat(sessionFiles(file));
-   else if (/\.jsonl$/.test(file)) files.push(file);
-  });
-  return files;
- }
+ [ -f "$chat_bun" ] && [ ! -L "$chat_bun" ] && [ -x "$chat_bun" ] || return 3
+ if BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 "$chat_bun" -e 'process.exit(0)' >/dev/null 2>&1; then :; else return 3; fi
+ BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 "$chat_bun" - "$@" 2>/dev/null <<'BWM_CURRENT_CHAT'
+const fs = require('node:fs');
+const path = require('node:path');
+const env = process.env;
+const fail = () => process.exit(1);
+const fileInfo = file => { const s = fs.lstatSync(file); if (!s.isFile() || !(s.mode & 0o444)) throw new Error(); return s; };
+function rows(file) {
+ fileInfo(file);
+ return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(line => line.trim()).map(line => {
+  const row = JSON.parse(line);
+  if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error();
+  return row;
+ });
+}
+function directories(folder) {
+ try { return fs.readdirSync(folder, {withFileTypes:true}).filter(e => e.isDirectory()).map(e => path.join(folder, e.name)); }
+ catch { return []; }
+}
+function sessionFiles(folder) {
+ let entries;
+ try { entries = fs.readdirSync(folder, {withFileTypes:true}); } catch { return []; }
+ return entries.flatMap(e => e.isDirectory() ? sessionFiles(path.join(folder,e.name)) : e.isFile() && e.name.endsWith('.jsonl') ? [path.join(folder,e.name)] : []);
+}
+// A renamed transcript can still be identified from its first metadata row. Never read other chats' messages.
+function metadata(file) {
+ fileInfo(file);
+ const fd = fs.openSync(file,'r');
  try {
-  var explicit;
-  for (var i = 0; i < options.length; i++) {
-   if (options[i] === "--session-id" && !explicit) explicit = options[++i];
-   else if (options[i] !== "--claude-local") throw new Error();
-  }
-  var claude = !!(env("CLAUDECODE") || env("CLAUDE_CODE_SESSION_ID") || env("CLAUDE_SESSION_ID"));
-  var session = explicit || (claude ? env("CLAUDE_CODE_SESSION_ID") || env("CLAUDE_SESSION_ID") : env("CODEX_THREAD_ID") || env("CODEX_SESSION_ID"));
-  if (!session || !/^[A-Za-z0-9_-]+$/.test(session)) throw new Error();
-  var files, rows, messages;
-  if (claude) {
-   var projects = (env("CLAUDE_CONFIG_DIR") || env("HOME") + "/.claude") + "/projects";
-   files = children(projects).filter(directory).map(function(folder) { return folder + "/" + session + ".jsonl"; }).filter(function(file) {
-    return nativeReader ? fm.fileExistsAtPath(file) : fs.existsSync(file);
-   });
-   if (files.length !== 1) throw new Error();
-   rows = records(files[0]);
-   if (!rows.some(function(row) { return row.sessionId === session && row.message && typeof row.message.role === "string"; })) throw new Error();
-   // A resumed file can retain earlier session rows. They cannot supply this session's code.
-   messages = rows.filter(function(row) { return row.sessionId === session && row.message && row.message.role === "user"; }).map(function(row) { return row.message; });
-  } else {
-   var codex = env("CODEX_HOME") || env("HOME") + "/.codex";
-   if (codex.charAt(0) !== "/") throw new Error();
-   var all = sessionFiles(codex + "/sessions");
-   files = all.filter(function(file) {
-    var name = file.slice(file.lastIndexOf("/") + 1);
-    return name.indexOf("rollout-") === 0 && name.slice(-session.length - 7) === "-" + session + ".jsonl";
-   });
-   if (!files.length) {
-    all.sort().reverse().slice(0, 100).forEach(function(file) {
-     try {
-      var first = JSON.parse(read(file, 65536));
-      if (first.type === "session_meta" && first.payload && first.payload.id === session) files.push(file);
-     } catch (_) { /* Another chat's incomplete metadata cannot supply this chat's code. */ }
-    });
-   }
-   if (files.length !== 1) throw new Error();
-   rows = records(files[0]);
-   var metas = rows.filter(function(row) { return row.type === "session_meta"; });
-   if (metas.length !== 1 || !metas[0].payload || metas[0].payload.id !== session || rows[0] !== metas[0]) throw new Error();
-   messages = rows.filter(function(row) { return row.type === "response_item" && row.payload && row.payload.type === "message" && row.payload.role === "user"; }).map(function(row) { return row.payload; });
-  }
-  var latest = "";
-  var command = /^(?:\/(?:[A-Za-z0-9_-]+:)?install-bwm(?:\s|$)|\[\$?(?:[A-Za-z0-9_-]+:)?install-bwm\]\([^\n]*?\/install-bwm\/SKILL\.md\)(?:\s|$))|<command-name>\/(?:[A-Za-z0-9_-]+:)?install-bwm<\/command-name>/;
-  messages.forEach(function(message) {
-   var value = text(message.content).trim(), found = "", match;
-   var pattern = /(^|[^A-Za-z0-9_.-])([A-Za-z0-9-]{3,32}\.[A-Za-z0-9_-]{86})(?=\.*(?:[^A-Za-z0-9_.-]|$))/g;
-   while ((match = pattern.exec(value))) found = match[2];
-   if (found) latest = found;
-   // A new install invocation without a code must not silently reuse an earlier one.
-   else if (command.test(value)) latest = "";
-  });
-  return latest || "BWM_CHAT_NO_CODE";
- } catch (_) { return "BWM_CHAT_UNREADABLE"; }
+  const bytes = Buffer.alloc(65536);
+  const count = fs.readSync(fd,bytes,0,bytes.length,null);
+  const newline = bytes.subarray(0,count).indexOf(10);
+  if (newline < 0 && count === bytes.length) throw new Error();
+  return JSON.parse(bytes.subarray(0,newline < 0 ? count : newline).toString('utf8'));
+ } finally { fs.closeSync(fd); }
 }
-if (!nativeReader) process.stdout.write(run(process.argv.slice(2)));
-BWM_CURRENT_CHAT
+function contentText(content) {
+ if (typeof content === 'string') return content;
+ if (!Array.isArray(content)) return '';
+ return content.filter(b => b && (b.type === 'text' || b.type === 'input_text') && typeof b.text === 'string').map(b => b.text).join('\n');
+}
+try {
+ let app, session;
+ const args = process.argv.slice(2);
+ for (let i=0; i<args.length; i++) {
+  if (args[i] === '--app' && !app) app=args[++i];
+  else if (args[i] === '--session-id' && !session) session=args[++i];
+  else if (args[i] === '--chosen-action') { if (!['update','repair','add-app'].includes(args[++i])) throw new Error(); }
+  else if (args[i] !== '--claude-local') throw new Error();
  }
- if chat_answer=$(run_chat_reader "$@") && [ -n "$chat_answer" ]; then :
- elif [ "$chat_native" = false ]; then
-  # A damaged runtime can pass its probe and still fail to run the stdin reader.
-  shift 2
-  [ -x /usr/bin/osascript ] && /usr/bin/osascript -l JavaScript -e '1' >/dev/null 2>&1 || return 3
-  chat_answer=$(run_chat_reader /usr/bin/osascript -l JavaScript - "$@") || return 3
- else
-  return 3
- fi
- case "$chat_answer" in
-  BWM_CHAT_NO_CODE) return 2 ;;
-  BWM_CHAT_UNREADABLE) return 1 ;;
-  '') return 3 ;;
-  *) printf '%s' "$chat_answer" ;;
- esac
+ app ||= env.CLAUDECODE || env.CLAUDE_CODE_SESSION_ID || env.CLAUDE_SESSION_ID ? 'claude-code' : 'codex';
+ if (!['claude-code','codex'].includes(app)) throw new Error();
+ session ||= app === 'claude-code' ? env.CLAUDE_CODE_SESSION_ID || env.CLAUDE_SESSION_ID : env.CODEX_THREAD_ID;
+ if (!session || !/^[A-Za-z0-9_-]+$/.test(session)) throw new Error();
+ let messages;
+ if (app === 'claude-code') {
+  const config = env.CLAUDE_CONFIG_DIR || path.join(env.HOME,'.claude');
+  if (!path.isAbsolute(config)) throw new Error();
+  const found = directories(path.join(config,'projects')).map(d => path.join(d,session+'.jsonl')).filter(f => fs.existsSync(f));
+  if (found.length !== 1) throw new Error();
+  const data = rows(found[0]);
+  if (!data.some(r => r.sessionId === session && r.message)) throw new Error();
+  // A meta row is the app's own note, such as a skill's text, never the person's words.
+  messages = data.filter(r => r.sessionId === session && r.type === 'user' && r.message?.role === 'user' && r.isMeta !== true).map(r => r.message);
+ } else {
+  const config = env.CODEX_HOME || path.join(env.HOME,'.codex');
+  if (!path.isAbsolute(config)) throw new Error();
+  const all = sessionFiles(path.join(config,'sessions'));
+  let found = all.filter(f => path.basename(f).startsWith('rollout-') && path.basename(f).endsWith('-'+session+'.jsonl'));
+  if (!found.length) found = all.filter(f => { try { const m=metadata(f); return m.type === 'session_meta' && m.payload?.id === session; } catch { return false; } });
+  if (found.length !== 1) throw new Error();
+  const data = rows(found[0]);
+  const metas = data.filter(r => r.type === 'session_meta');
+  if (metas.length !== 1 || data[0] !== metas[0] || metas[0].payload?.id !== session) throw new Error();
+  // Forks may carry the parent's messages under the child's metadata. Without a per-message
+  // thread identity they cannot safely supply a code. Ask for a fresh chat instead of borrowing one.
+  if (metas[0].payload.forked_from_id || metas[0].payload.forkedFromId) throw new Error();
+  // The app's own notes in the user role (its environment, its instructions) are never the person's words.
+  messages = data.filter(r => r.type === 'response_item' && r.payload?.type === 'message' && r.payload.role === 'user' && !/^\s*(?:<environment_context>|<user_instructions>|# AGENTS\.md instructions)/.test(contentText(r.payload.content))).map(r => r.payload);
+ }
+ // One rule, with no guessing. Any message from the person that holds anything shaped like a code,
+ // wherever it sits in the message, is a code attempt, and the newest attempt decides. If it holds
+ // exactly one valid code and nothing else shaped like a code, that code is used; otherwise setup stops
+ // and asks for the code on its own, and never uses an earlier code. An /install-bwm request with
+ // nothing shaped like a code is a fresh request, so setup asks for the code rather than reuse one.
+ // Shaped like a code: up to 64 letters, digits, underscores or hyphens, a dot, and 16 or more more,
+ // not joined to letters, digits or dots before it. A code is 3 to 32 letters, digits or hyphens, a
+ // dot, and exactly 86 letters, digits, underscores or hyphens.
+ const shaped = /(^|[^A-Za-z0-9_.-])([A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]{16,})/g;
+ const valid = /^[A-Za-z0-9-]{3,32}\.[A-Za-z0-9_-]{86}$/;
+ const invocation = /(?:^\/(?:[A-Za-z0-9_-]+:)?install-bwm(?:\s|$)|^\[\$?(?:[A-Za-z0-9_-]+:)?install-bwm\]\([^\n]*\/install-bwm\/SKILL\.md\)(?:\s|$)|<command-name>\/(?:[A-Za-z0-9_-]+:)?install-bwm<\/command-name>)/;
+ let attempt = null;
+ for (const message of messages) {
+  const text = contentText(message.content).trim();
+  const tries = [...text.matchAll(shaped)].map(m => m[2]);
+  if (tries.length) attempt = tries;
+  else if (invocation.test(text)) attempt = null;
+ }
+ if (!attempt) process.exit(2);
+ if (attempt.length !== 1 || !valid.test(attempt[0])) process.exit(4);
+ process.stdout.write(attempt[0]);
+} catch { fail(); }
+BWM_CURRENT_CHAT
 }
-
-# The AI calls only --code-from-chat. It never supplies the secret in command text or tool stdin.
+# A name the member's session already exported stays exported when it is given a new value, so every
+# program setup starts would be handed it. Each name that will hold the code or its signature half is
+# unset first, so setup's own value is never exported.
+unset code code_signature
 code=
-if [ "${1:-}" = "--code-on-stdin" ]; then code=$(sed -n '1p' | tr -d ' \t\r') || code=
-elif [ "${1:-}" = "--code-from-chat" ]; then
+if [ "${1:-}" = --code-from-chat ]; then
  shift
  chat_status=0
  code=$(code_from_current_chat "$@") || chat_status=$?
- # The app may not have written the message or finished its JSON row yet.
+ # The app can be finishing the current JSONL row when the shell starts.
  if [ "$chat_status" = 1 ] || [ "$chat_status" = 2 ]; then
   sleep 0.2
   chat_status=0
@@ -279,16 +208,18 @@ elif [ "${1:-}" = "--code-from-chat" ]; then
  fi
  case "$chat_status" in
   0) ;;
-  2) printf '%s\n' "$no_code_message"; exit 0 ;;
-  3) printf '%s\n' "$chat_reader_repair_message"; exit 0 ;;
-  *) printf '%s\n' "$code_from_chat_message"; exit 0 ;;
+  2) if [ -n "$chosen_action" ]; then printf '%s\n' "$chosen_no_code_message"; else printf '%s\n' "$no_code_message"; fi; exit 0 ;;
+  3) printf '%s\n' "$chat_reader_missing_message"; exit 0 ;;
+  # The newest code given is not a code: nothing is sent, and no earlier code is used in its place.
+  4) if [ -n "$chosen_action" ]; then printf '%s\n' "$chosen_not_a_code_message"; else printf '%s\n' "This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then $start_mindy with it."; fi; exit 0 ;;
+  *) printf '%s\n' "$chat_unreadable_message"; exit 0 ;;
  esac
+elif [ "${1:-}" = --code-on-stdin ]; then
+ # Internal callers and offline installer rehearsals only. The skill never sends a code this way.
+ # The code is read by the system's own sed and tr, never by a program found on PATH.
+ code=$(/usr/bin/sed -n '1p' | /usr/bin/tr -d ' \t\r') || code=
 fi
 if [ -z "$code" ]; then printf '%s\n' "$no_code_message"; exit 0; fi
-# Only the identified Local Code skill route enables records without the CLI.
-for setup_option in "$@"; do
- if [ "$setup_option" = --claude-local ]; then MINDY_CLAUDE_LOCAL=1; export MINDY_CLAUDE_LOCAL; fi
-done
 exec 2>/dev/null
 
 # The code is a secret. Everything this script prints or keeps goes through redact, which replaces
@@ -312,9 +243,10 @@ invisible_marks=$(printf '\302\255|\315\217|\330\234|\341\205[\237\240]|\341\236
 # lines, so each hundred lines are searched together with the last lines of the hundred before, which
 # are held back until then. The held-back lines are enough to hold more than the whole code, so a code
 # is never cut between two searches, and the cost grows with the length of the input, not with its
-# square. When no code long enough is given, the input passes through as it is.
+# square. When no code long enough is given, the input passes through as it is. The code is in awk's
+# environment, so it is the system's own /usr/bin/awk, never an awk found on PATH.
 redact() {
-	MINDY_SETUP_REDACT_CODE=$code MINDY_SETUP_REDACT_SIGNATURE=$code_signature MINDY_SETUP_INVISIBLE=$invisible_marks LC_ALL=C awk '
+	MINDY_SETUP_REDACT_CODE=$code MINDY_SETUP_REDACT_SIGNATURE=$code_signature MINDY_SETUP_INVISIBLE=$invisible_marks LC_ALL=C /usr/bin/awk '
 		# A character as plain text inside a pattern.
 		function plain(c) { return index("\\^$.[]|()*+?{}", c) ? "\\" c : c }
 		# A pattern for the secret with, between each two of its characters, anything that may have been
@@ -363,24 +295,28 @@ redact() {
 }
 say() { printf '%s\n' "$1" | redact; }
 # curl to MINDY's download server, with the code's Authorization header read from a here-document on
-# descriptor 3 rather than given as an argument, so the process list never shows the code.
+# descriptor 3 rather than given as an argument, so the process list never shows the code. It is the
+# system's own /usr/bin/curl, by its full path, never a curl found on PATH, and nothing can name
+# another one.
 # gate_curl <curl arguments>
 gate_curl() {
-	curl -H @/dev/fd/3 "$@" 3<<GATE_AUTHORIZATION
+	/usr/bin/curl -H @/dev/fd/3 "$@" 3<<GATE_AUTHORIZATION
 Authorization: Bearer $code
 GATE_AUTHORIZATION
 }
 # The first line of a reason worth reading: not blank, not a numbered source excerpt, not a caret,
 # not a banner of repeated = - * # ~ or _. A Bun crash report opens with a banner and a block about
-# the machine, so its panic line, when there is one, is the reason.
+# the machine, so its panic line, when there is one, is the reason. A line longer than 300 characters
+# is cut to 300, or to the number given, and 0 never cuts it.
+# first_meaningful [most characters]
 first_meaningful() {
-	redact | awk '
+	redact | awk -v most="${1:-300}" '
 		{ gsub(/[[:cntrl:]]/, " ") }
 		/^[[:space:]]*$/ { next }
 		/^[[:space:]]*[0-9]+[[:space:]]*\|/ { next }
 		/^[[:space:]]*\^[[:space:]]*$/ { next }
 		/^[[:space:]]*[=*#~_-][=*#~_-][=*#~_-]+[[:space:]]*$/ { next }
-		{ line = $0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line); if (length(line) > 300) line = substr(line, 1, 297) "..." }
+		{ line = $0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line); if (most > 0 && length(line) > most) line = substr(line, 1, most - 3) "..." }
 		line ~ /^panic[(:]/ { print line; found = 1; exit }
 		first == "" { first = line }
 		END { if (!found && first != "") print first }'
@@ -393,6 +329,13 @@ reason_of() {
 		fi
 	done
 	return 0
+}
+# Notes who said a stop's reason and the whole of the line they said, the same line reason_of reads but
+# never cut short, so that full_disk_said can read its end as well as its start.
+# said_by <tool|engine> <file the reason is read from>
+said_by() {
+	reason_said_by=$1
+	reason_said=$(first_meaningful 0 <"$2" 2>/dev/null) || reason_said=
 }
 
 plugin_root="$(dirname "$0")/.."
@@ -409,22 +352,25 @@ signal=
 step='starting setup'
 stop_message=
 stop_reason=
-member_reason=
-withhold_reason=false
+# Who said the stop's reason, when it is a command's own error rather than setup's own words or a
+# server's answer: tool (a command on this computer, such as mkdir or tar) or engine (MINDY's engine,
+# or Bun running it), and the whole line it said, never cut short (said_by). Each stop that passes on
+# such an error says which, so the no-space line reads the error only where that one puts it
+# (full_disk_said).
+reason_said_by=
+reason_said=
 stop_status=
 stop_file=
 stop_stamp=
 report_id=
 keep_failure=
 send_outcome=
+send_exit=
 member_names=
 version=
 active_version=
 harness_list=
 harnesses_checked=false
-# What a stop shows in place of a reason it must not show. Not yet decided.
-reason_kept="the reason is kept in setup's stop note on this Mac, in ~/.mindy/setup-stops"
-reason_not_shown='the reason is not shown here'
 # The gate's own sentences (build-machine-stack src/mindy-gate-rules.js), matched exactly and never
 # relayed: the earlier words, and the words the gate uses since it took the decided wording. The
 # Old gate replies are compared only. The client shows its own setup sentences.
@@ -444,11 +390,6 @@ engine_different_code_sentence_before='This machine already has a different code
 is_gate_not_issued() { [ "$1" = "$gate_not_issued_sentence" ] || [ "$1" = "$gate_not_issued_sentence_now" ]; }
 is_gate_not_active() { [ "$1" = "$gate_not_active_sentence" ] || [ "$1" = "$gate_not_active_sentence_now" ]; }
 is_gate_too_many() { [ "$1" = "$gate_too_many_sentence" ] || [ "$1" = "$gate_too_many_sentence_now" ]; }
-
-# A reason as the end of a sentence: with a full stop, unless it already ends with one.
-as_sentence() {
-	case "$1" in *.) printf '%s' "$1" ;; *) printf '%s.' "$1" ;; esac
-}
 
 # Each step names itself before it starts, and its own error output goes to step.err, so an
 # unexpected exit under set -eu can say which step stopped and what the failed command said.
@@ -508,23 +449,6 @@ set_home_aside() {
 		}'
 }
 
-# One check for every word a stop shows that someone else wrote: a tool's output, the engine's
-# answer, a page that answered in place of the download server, or why the stop note could not be
-# kept. The name the gate's sentences use must never reach the screen, in any letter case. The check
-# reads the text as it would be shown, with the code already removed, and with the member's own home
-# folder path taken out, compared as plain text: that folder name is the member's own and names no
-# one else. The home path is taken out only as a whole path part, so a longer folder name that begins
-# with it is still checked. What is shown is unchanged.
-# must_not_show <text>
-must_not_show() {
-	printf '%s\n' "$1" | redact | set_home_aside ' ' | awk '
-		{
-			line = $0
-			if (tolower(line) ~ /mike/) found = 1
-		}
-		END { exit (found ? 0 : 1) }'
-}
-
 # The member's names on this Mac, each replaced with [name removed] wherever it stands as a whole
 # word, in any letter case: their full name, each word of it of three letters or more, and their user
 # name. The longest is removed first, so a user name that is also the first word of the full name
@@ -575,7 +499,7 @@ without_names() {
 # Text from standard input with the marks that show nothing taken out (invisible_marks above), so they
 # cannot hide a name, a path or a code in what leaves this Mac.
 without_invisible() {
-	MINDY_SETUP_INVISIBLE=$invisible_marks LC_ALL=C awk '{ gsub(ENVIRON["MINDY_SETUP_INVISIBLE"], ""); print }'
+	MINDY_SETUP_INVISIBLE=$invisible_marks LC_ALL=C /usr/bin/awk '{ gsub(ENVIRON["MINDY_SETUP_INVISIBLE"], ""); print }'
 }
 
 # Text from standard input as it is kept before anything is looked for in it: a Windows line end is
@@ -583,11 +507,13 @@ without_invisible() {
 # a mark cut off at its end) is dropped, and control characters other than tab and newline are
 # dropped. All of that happens before redact, never after it, because taking a stray byte out of the
 # middle of a code afterwards would join the code back together once redact had passed over it.
+# The text can still hold the code here, so each command is the system's own, never one found on PATH,
+# as in without_invisible and redact.
 # plain_text
 plain_text() {
-	LC_ALL=C sed -e "s/$(printf '\r')\$//" | LC_ALL=C tr '\r' '\n' \
-		| if command -v iconv >/dev/null 2>&1; then iconv -c -f UTF-8 -t UTF-8 2>/dev/null; else cat; fi \
-		| LC_ALL=C tr -d '\000-\010\013-\037\177'
+	LC_ALL=C /usr/bin/sed -e "s/$(printf '\r')\$//" | LC_ALL=C /usr/bin/tr '\r' '\n' \
+		| if [ -x /usr/bin/iconv ]; then /usr/bin/iconv -c -f UTF-8 -t UTF-8 2>/dev/null; else /bin/cat; fi \
+		| LC_ALL=C /usr/bin/tr -d '\000-\010\013-\037\177'
 }
 
 # Text that is about to leave this Mac: made plain text, the marks that show nothing dropped, the code
@@ -656,6 +582,7 @@ stop_time() {
 #     403, which it gives only for a code it never issued, whatever the words of its refusal
 # Whatever it returns, send_outcome says what came of it, for the note.
 send_stop_report() {
+	send_exit=
 	membership_number=${code%.*}
 	case "$membership_number" in
 		''|*[!A-Za-z0-9-]*) send_outcome='no, the access code has no membership number'; return 3 ;;
@@ -697,6 +624,99 @@ send_stop_report() {
 	return 1
 }
 
+# Whether one line of a command's own error says the disk is full, read only in the place where that
+# command puts its error, never where a path or a file name can be (each form below was read from the
+# real commands on a full disk on 14 October 2026):
+# - tool, a command on this computer: "<command>: <path>: <error>", the system's words for the error
+#   last, after any path, as mkdir, mktemp, tar and the shell say it ("mkdir: <path>: No space left on
+#   device", "package/x: Write failed: No space left on device"). Only a line that ends with exactly
+#   ": No space left on device" is a full disk.
+# - engine, MINDY's engine: its stop line is JSON. Its "code" is the system's own code for the error,
+#   "ENOSPC", when a write on this computer failed; when MINDY could not be set up, its message starts
+#   with the system's code and words; when the code could not be saved, its detail has the system's
+#   code and words straight after the engine's own fixed words for what could not be written or
+#   replaced: the verifier record, when it is first written and when an app is added to it; and the
+#   private file, when the Keychain did not take the code, where the engine's fixed words name the
+#   file or folder in the member's own home folder that could not be written or made. Bun, when
+#   the engine stops without that line, starts with the system's code and words and puts any path last
+#   ("ENOSPC: no space left on device, open '<path>'").
+# Words anywhere else, such as inside a path or a file name, or the bare code ENOSPC, are never read.
+# full_disk_said <tool|engine> <line>
+full_disk_said() {
+	case "$1" in
+		tool) case "$2" in *': No space left on device') return 0 ;; esac ;;
+		engine)
+			case "$2" in
+				'ENOSPC: no space left on device, '*|'{"code":"ENOSPC",'*|'{"code":"MINDY_HOME_RUNTIME_LAY_FAILED","message":"ENOSPC: no space left on device, '*) return 0 ;;
+				'{"case":"setup-record-not-written","code":"CREDENTIAL_PLACEMENT_FAILED","detail":"the verifier record could not be written: ENOSPC: no space left on device, '*) return 0 ;;
+				'{"case":"setup-record-not-written","code":"CREDENTIAL_PLACEMENT_FAILED","detail":"the verifier record'"'"'s harnesses could not be replaced: ENOSPC: no space left on device, '*) return 0 ;;
+				'{"case":"keychain-out-of-reach-and-file-not-written","code":"CREDENTIAL_PLACEMENT_FAILED","detail":"the Keychain did not take the code ('*)
+					# The Keychain's own words come first and can name a keychain, so the engine's words for
+					# the private file must be there exactly once: then what follows them is the engine's.
+					# Either the system's code and words straight away, or the engine's fixed words for the
+					# file or folder that could not be written or made, which are always in this member's
+					# home folder, and then straight away the system's code and words.
+					private_file_first=${2#*"); the private file could not be written: "}
+					private_file_last=${2##*"); the private file could not be written: "}
+					if [ "$private_file_first" = "$private_file_last" ]; then
+						case "$private_file_last" in 'ENOSPC: no space left on device, '*) return 0 ;; esac
+						private_file_home=${home:-}
+						private_file_home=${private_file_home%/}
+						if [ -n "$private_file_home" ]; then
+							case "$private_file_last" in
+								"the folder $private_file_home/.mindy could not be made: ENOSPC: no space left on device, "*|\
+								"the folder $private_file_home/.mindy/access-code could not be made: ENOSPC: no space left on device, "*|\
+								"the file $private_file_home/.mindy/access-code/mindy-access-code could not be written: ENOSPC: no space left on device, "*|\
+								"the file $private_file_home/.mindy/access-code/membership-number could not be written: ENOSPC: no space left on device, "*) return 0 ;;
+							esac
+						fi
+					fi ;;
+			esac ;;
+	esac
+	return 1
+}
+
+# Whether this computer has no network at all, by its own routing table: route says "not in table"
+# when asked for the default route, for IPv4 and for IPv6 alike. The question is fixed and the answer is
+# route's own words, so nothing read here can hold a path or a file name. A route that cannot be asked,
+# as in a sandbox, or any other answer, does not say this computer is offline.
+# The system's own route is asked, /sbin/route, by its full path, never a route found on PATH, and
+# nothing can name another one.
+offline_here() {
+	for route_family in -inet -inet6; do
+		case "$(/sbin/route -n get "$route_family" default 2>&1)" in *'not in table'*) ;; *) return 1 ;; esac
+	done
+	return 0
+}
+
+# The one line for a cause the member can fix themselves, or nothing. Only two causes are recognised,
+# and only for certain; anything else adds no line and nothing raw is shown. Neither is ever read from
+# text that can hold a path or a file name.
+# - No space: the stop's reason is a command's own error, and the command said the disk is full, in the
+#   place it puts its error (full_disk_said); or the stop note could not be kept because the disk is
+#   full, as mkdir or the shell said it. A reason in setup's own words or from a server's answer is not
+#   a command's error, so it never gives this line.
+# - No internet: the details could not reach us either (send_stop_report returned 2), and this computer
+#   has no network route at all (offline_here). What any step or tool said is not read for this.
+# fixable_line <what send_stop_report returned>
+fixable_line() {
+	if { [ -n "$reason_said_by" ] && full_disk_said "$reason_said_by" "$reason_said"; } || full_disk_said tool "$keep_failure"; then
+		printf '%s\n' "$no_space_line"
+		return 0
+	fi
+	if [ "$1" = 2 ] && offline_here; then printf '%s\n' "$no_internet_line"; fi
+	return 0
+}
+
+# Setup's own sentence for the step it was on, then the line for a cause the member can fix, if setup
+# recognised one. Every step's name is setup's own plain words (begin), so this never holds a tool's
+# or the engine's words.
+# stopped_line <what send_stop_report returned>
+stopped_line() {
+	fixable=$(fixable_line "$1")
+	printf '%s\n' "Setup stopped while $step.${fixable:+ $fixable}"
+}
+
 # Tells the member, in one of the decided messages and nothing else, what stopped setup, chosen by
 # what happened. The stop note is kept first, so the report can carry it; what came of sending, and
 # what was said, are added to the note afterwards. Whether the note could be kept is in the note, or
@@ -706,30 +726,23 @@ send_stop_report() {
 #   and may be waiting for it to end, so nothing is sent.
 # - The gate refused a code it never issued, the gate is pausing this connection, or the gate could not
 #   be reached: that message alone. Nothing is sent.
-# - Any other stop is sent to MINDY's download server, with its note when the note was kept. Then:
-#   it was taken: the stop's own message, which says the details were sent (the code is no longer
-#   active, this Mac already has a different code, or the download is not a signed release), or for
-#   any other stop "Setup stopped while <step>: <reason>." and the sent ending;
-#   it was not taken: "Setup stopped while <step>: <reason>." and the not-taken ending, where the
-#   reason for the three messages above is that message's own first words;
-#   the server was not reached: the unreachable message;
+# - Any other stop is sent to us, with its note when the note was kept. Then:
+#   it was taken: the stop's own message, which says we have the details (the code is no longer
+#   active, this computer already has a different code, or the install package is not a signed
+#   release), or for any other stop setup's sentence for the step and the sent ending;
+#   it was not taken, or did not reach us: for those three causes, the cause's own words with the
+#   ending that says we did not receive the details and the next step for that cause; for any other
+#   stop, setup's sentence for the step and the not-taken ending;
 #   the code is not a MINDY access code: the not-issued message.
-# A reason that must not be shown is replaced by where it is kept, or, when the note could not be
-# kept, by saying it is not shown.
+# Setup's sentence for the step is "Setup stopped while <step>.", with the line for a cause the member
+# can fix after it when setup recognised one. The raw reason, a tool's or the engine's own words, is
+# never shown: it goes only to the private stop note and the stop report (decision 2245384).
+
 # tell <setup exit status>
 tell() {
 	[ -n "$stop_reason" ] || stop_reason="the command for $step gave no reason${stop_status:+ (exit status $stop_status)}"
-	case "$stop_message" in
-		"$not_active_message") member_reason='this MINDY access code is no longer active' ;;
-		"$different_code_message") member_reason='this Mac already has a different MINDY access code saved' ;;
-		"$unsigned_message") member_reason='this download is not a signed MINDY release' ;;
-	esac
-	shown_reason=${member_reason:-$stop_reason}
-	reason_withheld=false
-	if [ "$withhold_reason" = true ] || must_not_show "$shown_reason"; then reason_withheld=true; shown_reason=$reason_kept; fi
 	stop_time
 	if keep_stop "$1"; then note_kept=true; else note_kept=false; fi
-	if [ "$note_kept" = false ] && [ "$reason_withheld" = true ]; then shown_reason=$reason_not_shown; fi
 	send_outcome=
 	if [ -n "$signal" ]; then
 		send_outcome='no, a signal stopped setup'
@@ -741,10 +754,13 @@ tell() {
 		case "$sent" in
 			0)
 				if [ -n "$stop_message" ]; then said_line=$stop_message
-				else said_line="Setup stopped while $step: $(as_sentence "$shown_reason") $details_sent_ending"; fi ;;
-			2) said_line="Setup stopped while $step: $(as_sentence "$shown_reason") $details_not_taken_ending" ;;
+				else said_line="$(stopped_line 0) $details_sent_ending"; fi ;;
 			3) said_line=$not_issued_message ;;
-			*) said_line="Setup stopped while $step: $(as_sentence "$shown_reason") $details_not_taken_ending" ;;
+			*)
+				if [ "$stop_message" = "$not_active_message" ]; then said_line=$not_active_unsent_message
+				elif [ "$stop_message" = "$different_code_message" ]; then said_line=$different_code_unsent_message
+				elif [ "$stop_message" = "$unsigned_message" ]; then said_line=$unsigned_unsent_message
+				else said_line="$(stopped_line "$sent") $details_not_taken_ending"; fi ;;
 		esac
 	fi
 	if [ "$step" = "checking for installed memory" ]; then said_line=$memory_first_message; fi
@@ -768,8 +784,8 @@ server_error() {
 # for it (the gate's rules are build-machine-stack src/mindy-gate-rules.js; it refuses with 403 and
 # limits with 429): the code was not issued, the code is no longer active (its answer for a revoked or
 # expired code too), and too many tries. Any other answer, whether from the gate or from something in
-# the way such as a proxy, stops with the status alone as the reason shown. The stop note and the
-# report keep the answer's own message after the status, and the note keeps the whole answer.
+# the way such as a proxy, stops with setup's sentence for the step. The stop note and the report keep
+# the status and the answer's own message after it, and the note keeps the whole answer.
 # stop_for_status <status> <answer file>
 stop_for_status() {
 	message=$(server_error "$2")
@@ -781,7 +797,6 @@ stop_for_status() {
 		429)
 			if is_gate_too_many "$message"; then stop_saying "$too_many_message" "$status_reason: $message"; fi ;;
 	esac
-	member_reason=$status_reason
 	kept_message=$(printf '%s\n' "$message" | first_meaningful)
 	if [ -n "$kept_message" ]; then stop "$status_reason: $kept_message"; fi
 	stop "$status_reason"
@@ -879,12 +894,14 @@ cleanup() {
 		if [ "$said" = false ]; then
 			said=true
 			stop_message=
-			member_reason=
 			if [ -n "$signal" ]; then
 				stop_status=
 				stop_reason="it was stopped by $(signal_named)"
 			else
 				stop_status=$exit_status
+				# Only the shell and the commands a step runs write to step.err: the engine's and curl's
+				# errors go to their own files.
+				said_by tool "$tmp/step.err"
 				stop_reason=$(reason_of "$tmp/step.err")
 				[ -n "$stop_reason" ] || stop_reason="a command stopped with exit status $exit_status"
 			fi
@@ -934,7 +951,7 @@ client_root="$home/mindy"
 downloads="$home/.mindy/downloads"
 
 begin 'making a temporary folder'
-if made=$(mktemp -d 2>&1) && [ -d "$made" ]; then tmp=$made; else stop "$(printf '%s\n' "$made" | first_meaningful)"; fi
+if made=$(mktemp -d 2>&1) && [ -d "$made" ]; then tmp=$made; else reason_said_by=tool; reason_said=$(printf '%s\n' "$made" | first_meaningful 0); stop "$(printf '%s\n' "$made" | first_meaningful)"; fi
 
 begin 'checking for installed memory'
 capture_registered=false
@@ -943,7 +960,7 @@ for registration in "$HOME/Library/Application Support/MINDY/memories/"*.json; d
 done
 [ "$capture_registered" = true ] || stop_saying "$memory_first_message" 'no capture memory is registered on this Mac'
 
-begin "asking MINDY's download server for the latest release"
+begin "checking MINDY's setup server for the latest release"
 packument="$tmp/packument.json"
 if status=$(gate_curl -sS -H 'Accept: application/json' -o "$packument" -w '%{http_code}' 'https://gate.mindy.build/mindy' 2>"$tmp/curl-packument.err"); then :; else
 	stop_for_curl "$?" "$tmp/curl-packument.err"
@@ -952,22 +969,22 @@ fi
 # A 200 answer that is not MINDY's release list at all, such as a Wi-Fi sign-in page, says so.
 if ! grep -q '"dist-tags"[[:space:]]*:' "$packument" 2>/dev/null; then
 	answer_start=$(reason_of "$packument")
-	if [ -n "$answer_start" ]; then member_reason="the answer is not MINDY's release list"; stop "$member_reason; it begins: $answer_start"; fi
+	if [ -n "$answer_start" ]; then stop "the answer is not MINDY's release list; it begins: $answer_start"; fi
 	stop 'the answer was empty'
 fi
 
 tags=$(sed -n 's/.*"dist-tags"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\1/p' "$packument" | head -n 1)
 version=$(printf '%s\n' "$tags" | sed -n 's/.*"latest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
-[ -n "$version" ] || stop "the download server's answer names no latest release"
+[ -n "$version" ] || stop "the setup server's answer names no latest release"
 version_entry=$(sed -n "s/.*\"$version\"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\1/p" "$packument" | head -n 1)
 integrity=$(printf '%s\n' "$version_entry" | sed -n 's/.*"integrity"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
-case "$integrity" in sha512-*) ;; *) stop "the download server's answer for MINDY $version has no sha512 integrity value" ;; esac
+case "$integrity" in sha512-*) ;; *) stop "the setup server's answer for MINDY $version has no sha512 integrity value" ;; esac
 
 # Enrol only the apps whose command is on this Mac: the install runs `claude --version` or
 # `codex --version` for each one it registers, so an app without its command stops the install.
 # An update keeps the apps recorded when MINDY was installed, and adds only an app that is on this
 # Mac now and that MINDY is not yet set up in (see the check just below).
-begin 'checking for Claude Code and Codex'
+begin 'checking which apps are on this computer'
 # Each app's command is looked for where that app installs it, not only on PATH, because the shell
 # that runs setup is the shell of whichever app the member typed the command in, and the other app's
 # command may not be on its PATH. This one lookup is used for a first install, an update and an add.
@@ -982,8 +999,9 @@ begin 'checking for Claude Code and Codex'
 # path after the first, to an executable file named codex. A found
 # command that is not on PATH gets its folder put at the end of PATH, for this script and the engine
 # it runs, which runs `claude --version` or `codex --version` for each app it registers.
-# MINDY_SETUP_APPLICATIONS_FOLDER names the folder to look in instead of /Applications, which is how a
-# test keeps the Mac it runs on out of its answers.
+# The two application folders are fixed, and nothing a computer has set can name another (row 2 fix
+# round 8). A test keeps the Mac it runs on out of its answers by naming its own folder in its own copy
+# of this script.
 # find_app_command <claude|codex> prints the command's full path, or nothing.
 find_app_command() {
 	app_found=$(command -v "$1" 2>/dev/null) || app_found=
@@ -995,7 +1013,7 @@ $home/.claude/local/claude"
 		app_candidates=${CODEX_CLI_PATH:-}
 		case "$app_candidates" in *:*|*'
 '*) app_candidates= ;; /*/codex) ;; *) app_candidates= ;; esac
-		for app_folder in "${MINDY_SETUP_APPLICATIONS_FOLDER:-/Applications}" "$home/Applications"; do
+		for app_folder in /Applications "$home/Applications"; do
 			app_candidates="${app_candidates:+$app_candidates
 }$app_folder/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex
 $app_folder/Codex.app/Contents/Resources/codex"
@@ -1025,6 +1043,9 @@ action=install
 if [ -n "$active_version" ]; then
  action=update
  details_not_taken_ending="$details_not_taken_ending Open your MINDY folder and type /bwmteam if you need help."
+ # The unsigned stop's retry may not be enough either, and an update has /bwmteam. The other two
+ # unsent causes already tell the member to message us in the group.
+ unsigned_unsent_message="$unsigned_unsent_message Open your MINDY folder and type /bwmteam if you need help."
 fi
 if [ "$active_version" = "$version" ]; then
 	# The latest release is already here. An app put on this Mac after MINDY, Claude Code or the
@@ -1032,7 +1053,7 @@ if [ "$active_version" = "$version" ]; then
 	# and a receipt that names none is one for both. Each app on this Mac that is not named gets MINDY
 	# by the same steps as an update, with that app added to the ones recorded. With nothing to add,
 	# setup says MINDY is already installed and does nothing else.
-	begin 'checking for Claude Code and Codex'
+	begin 'checking which apps are on this computer'
 	set_up=$(sed -n 's/.*"harnesses"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$active" | head -n 1)
 	set_up_list=
 	if [ -z "$set_up" ]; then set_up_list='claude-code codex'; else
@@ -1049,18 +1070,17 @@ if [ "$active_version" = "$version" ]; then
 		esac
 	done
  repair_install_record() {
-  begin 'laying MINDY on this Mac'
+  begin 'setting up MINDY on this computer'
   MINDY_INSTALLER_REPORTS=1; export MINDY_INSTALLER_REPORTS
-  withhold_reason=true
   # The folder's own signed selection supplies the interpreter and repair command.
   materialized=$(sed -n 's/^.*"materializedReleaseDir":"\([^"]*\)".*$/\1/p' "$active")
   case "$materialized" in "$client_root"/.mindy/system-releases/*) ;; *) stop "MINDY installed folder has no verified active release" ;; esac
   set -- "$materialized"/components/mindy-bun-runtime/*/bun
   [ "$#" -eq 1 ] && [ -x "$1" ] && [ ! -L "$1" ] || stop "MINDY installed folder has no bundled runtime"
   if "$1" "$materialized/components/mindy-engine/mindy-install/delivery-cli.ts" --repair-install-record --client-root "$client_root" >"$tmp/record-repair.out" 2>&1; then :; else
-   withhold_reason=true; stop "$(reason_of "$tmp/record-repair.out")"
+   said_by engine "$tmp/record-repair.out"
+   stop "$(reason_of "$tmp/record-repair.out")"
   fi
-  withhold_reason=false
  }
 	if [ "$adding_an_app" = false ]; then repair_install_record; finished=true; printf '%s\n' 'MINDY is already installed.'; exit 0; fi
 	# Enrolling grows the record of the apps before the install runs, and the record cannot shrink again.
@@ -1074,7 +1094,7 @@ if [ "$active_version" = "$version" ]; then
 	done
 fi
 
-begin 'checking for Claude Code and Codex'
+begin 'checking which apps are on this computer'
 if [ "$action" = update ] && [ -z "$harness_list" ]; then
 	recorded=$(sed -n 's/.*"harnessIds"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$client_root/.mindy/update-verifier.json" 2>/dev/null | head -n 1)
 	case "$recorded" in *'"claude-code"'*) harness_list='claude-code' ;; esac
@@ -1088,11 +1108,11 @@ if [ -z "$harness_list" ]; then
 	if [ -n "$codex_command" ] && "$codex_command" --version >/dev/null 2>&1 </dev/null; then harness_list="${harness_list:+$harness_list }codex"; fi
 fi
 harnesses_checked=true
-[ -n "$harness_list" ] || stop "neither claude nor codex is on this Mac's PATH"
+[ -n "$harness_list" ] || stop "neither claude nor codex is on this computer's PATH"
 set --
 for harness in $harness_list; do set -- "$@" --harness "$harness"; done
 
-begin 'downloading MINDY'
+begin 'preparing the Build With Mindy install package'
 mkdir -p "$downloads"
 version_dir="$downloads/$version"
 if [ ! -d "$version_dir" ]; then mkdir -p "$version_dir"; created_version_dir=true; fi
@@ -1105,23 +1125,23 @@ if [ "$status" != 200 ]; then
 	stop_for_status "$status" "$tmp/download-answer.out"
 fi
 
-begin 'checking the download'
+begin 'checking the install package'
 actual=$(shasum -a 512 "$archive" 2>"$tmp/shasum-archive.err" | sed 's/[[:space:]].*$//')
 expected=$(printf '%s\n' "${integrity#sha512-}" | openssl base64 -d -A 2>"$tmp/openssl-base64.err" | od -An -tx1 2>"$tmp/od.err" | tr -d ' \n')
 if [ -z "$expected" ]; then
 	decode_reason=$(reason_of "$tmp/openssl-base64.err" "$tmp/od.err")
-	[ -n "$decode_reason" ] || decode_reason="the download server's sha512 integrity value could not be decoded"
+	[ -n "$decode_reason" ] || decode_reason="the setup server's sha512 integrity value could not be decoded"
 	stop "$decode_reason"
 fi
 # An empty digest means shasum itself failed on this Mac, which says nothing about the download.
 [ -n "$actual" ] || stop "$(reason_of "$tmp/shasum-archive.err")"
-[ "$actual" = "$expected" ] || stop "the download's sha512 digest does not match the download server's integrity value"
+[ "$actual" = "$expected" ] || stop "the install package's sha512 digest does not match the setup server's integrity value"
 
-begin 'unpacking the download'
+begin 'unpacking the install package'
 mkdir -p "$tmp/unpacked"
-if tar -xzf "$archive" -C "$tmp/unpacked" 2>"$tmp/tar.err"; then :; else tar_status=$?; stop "$(reason_of "$tmp/tar.err")" "$tar_status"; fi
+if tar -xzf "$archive" -C "$tmp/unpacked" 2>"$tmp/tar.err"; then :; else tar_status=$?; said_by tool "$tmp/tar.err"; stop "$(reason_of "$tmp/tar.err")" "$tar_status"; fi
 
-begin 'checking the download is a signed MINDY release'
+begin 'checking the install package is a signed MINDY release'
 release="$tmp/unpacked/package/release"
 key="$plugin_root/keys/mindy-release-signature.pem"
 [ -f "$release/release-signature.sig" ] && [ -f "$release/release-signature.json" ] || stop_saying "$unsigned_message" 'the download has no release signature'
@@ -1140,11 +1160,11 @@ manifest_file_digest=$(shasum -a 256 "$release/release-manifest.json" 2>"$tmp/sh
 signed_manifest_file_digest=$(sed -n 's/.*"manifestFileDigest"[[:space:]]*:[[:space:]]*"sha256:\([^"]*\)".*/\1/p' "$release/release-signature.json" | head -n 1)
 [ -n "$signed_manifest_file_digest" ] && [ "$manifest_file_digest" = "$signed_manifest_file_digest" ] || stop_saying "$unsigned_message" 'the release manifest does not match its signature'
 
-begin "checking this Mac's chip"
+begin "checking this computer's chip"
 machine=$(uname -m 2>"$tmp/uname.err")
-case "$machine" in arm64) arch=arm64;; x86_64) arch=x64;; *) stop "this Mac reports its chip as ${machine:-nothing}";; esac
+case "$machine" in arm64) arch=arm64;; x86_64) arch=x64;; *) stop "this computer reports its chip as ${machine:-nothing}";; esac
 
-begin 'checking the download is a signed MINDY release'
+begin 'checking the install package is a signed MINDY release'
 bun="$release/components/mindy-bun-runtime/darwin-$arch/bun"
 runtime_component=$(sed -n 's/.*"componentId"[[:space:]]*:[[:space:]]*"mindy-bun-runtime"\(.*\)/\1/p' "$release/release-manifest.json" | sed 's/"componentId".*//')
 runtime_entry=$(printf '%s\n' "$runtime_component" | sed -n "s|.*\({[^{}]*\"path\"[[:space:]]*:[[:space:]]*\"darwin-$arch/bun\"[^{}]*}\).*|\1|p" | head -n 1)
@@ -1154,8 +1174,8 @@ actual_bun_digest="sha256:$(shasum -a 256 "$bun" 2>"$tmp/shasum-bun.err" | sed '
 [ "$actual_bun_digest" != 'sha256:' ] || stop "$(reason_of "$tmp/shasum-bun.err")"
 [ "$actual_bun_digest" = "$manifest_bun_digest" ] || stop_saying "$unsigned_message" 'the MINDY runtime in the download does not match the signed manifest'
 
-begin 'getting the MINDY runtime ready'
-if chmod 700 "$bun" 2>"$tmp/chmod.err"; then :; else chmod_status=$?; stop "$(reason_of "$tmp/chmod.err")" "$chmod_status"; fi
+begin 'getting MINDY ready to run'
+if chmod 700 "$bun" 2>"$tmp/chmod.err"; then :; else chmod_status=$?; said_by tool "$tmp/chmod.err"; stop "$(reason_of "$tmp/chmod.err")" "$chmod_status"; fi
 
 # This verifier belongs to setup, not the download. It loads only Bun built-ins.
 # Check the whole engine, including unlisted files, before any downloaded source loads.
@@ -1191,23 +1211,19 @@ if (cd "$tmp" && "$bun" -e '
 ' "$release" mindy-engine mindy-install/delivery-credential-cli.ts) >/dev/null 2>&1; then :; else stop_saying "$unsigned_message" 'the engine files in the download do not match the signed manifest'; fi
 
 engine="$release/components/mindy-engine/mindy-install"
-begin 'saving your access code on this Mac'
+begin 'saving your access code on this computer'
 enrol="$tmp/enrol.out"
-# The code reaches the engine on standard input, written by printf, which is part of this shell, so no
-# program's arguments hold it and the Mac's list of running programs never shows it.
+# No child process argument contains the code. The engine reads it on standard input.
 if printf '%s\n' "$code" | "$bun" "$engine/delivery-credential-cli.ts" bootstrap-with-code --membership-code-on-stdin --client-root "$client_root" "$@" >"$enrol" 2>&1; then enrol_status=0; else enrol_status=$?; fi
 if [ "$enrol_status" != 0 ]; then
 	message=$(sed -n '1p' "$enrol")
 	# The engine's own sentences, matched exactly. Release 1.0.6 has the older different-code sentence.
 	stop_for_gate_sentence "$enrol" "$enrol_status"
 	if [ "$message" = "$engine_different_code_sentence" ] || [ "$message" = "$engine_different_code_sentence_before" ]; then stop_saying "$different_code_message" "$message" "$enrol_status"; fi
-	# The engine's stop names its case, which becomes the plain reason. Its own code, such as
-	# CREDENTIAL_PLACEMENT_FAILED, and its detail stay in the stop note and the stop report.
-	enrol_reason=$(reason_of "$enrol")
-	enrol_case=$(printf '%s\n' "$enrol_reason" | sed -n 's/.*"case"[[:space:]]*:[[:space:]]*"\([a-z-]*\)".*/\1/p' | head -n 1)
-	member_reason=$(access_code_reason "$enrol_case")
-	case "$enrol_reason" in '{'*) [ -n "$member_reason" ] || withhold_reason=true ;; esac
-	stop "$enrol_reason" "$enrol_status"
+	# Any other engine stop, its case, its own code such as CREDENTIAL_PLACEMENT_FAILED and its detail
+	# included, goes whole to the stop note and the stop report.
+	said_by engine "$enrol"
+	stop "$(reason_of "$enrol")" "$enrol_status"
 fi
 
 MINDY_INSTALLER_REPORTS=1
@@ -1218,18 +1234,16 @@ if "$bun" "$engine/delivery-cli.ts" --release-signature "$release/release-signat
 	install_status=$?
 	stop_for_gate_sentence "$install" "$install_status"
 	install_reason=$(reason_of "$install")
- if grep -q 'MINDY_HOME_RUNTIME_LAY_FAILED' "$install"; then begin 'laying MINDY on this Mac'; withhold_reason=true; fi
-	case "$install_reason" in
-		*"Claude Local Code"*|*"Claude Code plugin copy"*|*"MINDY delivery install record"*|*"MINDY installed folder"*|*"Kept release signature does not name this release"*) withhold_reason=true ;;
-	esac
+	if grep -q 'MINDY_HOME_RUNTIME_LAY_FAILED' "$install"; then begin 'setting up MINDY on this computer'; fi
+	said_by engine "$install"
 	stop "$install_reason" "$install_status"
 fi
 
-begin 'laying MINDY on this Mac'
+begin 'setting up MINDY on this computer'
 lay="$tmp/lay.out"
 if "$bun" "$engine/home-runtime-lay.ts" "$client_root" >"$lay" 2>&1; then :; else
  lay_status=$?
- withhold_reason=true
+ said_by engine "$lay"
  stop "$(reason_of "$lay")" "$lay_status"
 fi
 

@@ -4,91 +4,104 @@ description: Use /install-bwm to set up Build With Mindy with your access code.
 user-invocable: true
 ---
 
-In the Claude app outside a Local Code session, do not run setup or ask for an access code. Say exactly: `Click the </> button and choose Local. Type /install-bwm with your access code there.` Then stop.
+AI-facing triggers: /install-bwm, install MINDY, set up MINDY, or my MINDY access code. Invoke this skill with no arguments. Never put a person's code in the Skill tool arguments, shell command, tool input, permission reason, description, running line or reply. It stays in their own chat message; the setup script reads it there.
 
-AI-facing triggers: /install-bwm, install MINDY, set up MINDY, or my MINDY access code.
+In the Claude app outside a Local Code session, do not run setup or ask for an access code. Say exactly: `Install has to run on your own computer, and this chat runs somewhere else, so it can't happen here. Click the </> button and choose Local, then type /install-bwm with your access code there.` Then stop.
 
-Invoke this skill with no arguments. Never put an access code in the Skill tool's arguments, including when a code sent on its own triggers this skill. The code stays only in the person's chat message; only the setup script reads it.
-
-Before asking for a code, saying anything about Manual, requesting permission or running the setup script, check the Mac with the ordinary file tools, or this plain read-only shell command inside the sandbox. It only reads the local registration and install receipts. It downloads nothing, runs no plugin script, writes nothing and needs no permission request. Never substitute a setup-script call for these reads. Keep its paths and markers internal.
+Before asking for a code, mentioning Manual, requesting permission or running any setup script, use ordinary file tools to read the records described below, or run this read-only command inside the sandbox. Replace `<current app>` with `claude-code` in either Claude Code host or `codex` in either Codex host. Replace `<current host>` with `claude-local`, `claude-terminal`, `chatgpt` or `codex` according to the app the person is using. Identify the ChatGPT app from the actual window or `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` containing `ChatGPT`; the word Codex alone does not prove the ChatGPT app. These literal names carry no code. Never run the setup script to do this check.
 
 ```sh
+bwm_app='<current app>'
+bwm_host='<current host>'
 bwm_root="$HOME/mindy"
-bwm_record="$HOME/.mindy/install-state.json"
-if [ -f "$bwm_record" ] && [ ! -L "$bwm_record" ] && grep -q '"format"[[:space:]]*:[[:space:]]*"mindy.delivery-install-state.v1"' "$bwm_record"; then
- bwm_recorded=$(sed -n 's/.*"baseRoot"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$bwm_record" | head -n 1)
- case "$bwm_recorded" in /*) bwm_root=$bwm_recorded ;; esac
-fi
-bwm_memory=false
-for bwm_registration in "$HOME/Library/Application Support/MINDY/memories/"*.json; do
- if [ -f "$bwm_registration" ] && [ ! -L "$bwm_registration" ] && grep -q '"role"[[:space:]]*:[[:space:]]*"capture"' "$bwm_registration"; then bwm_memory=true; break; fi
+bwm_read() { /usr/bin/plutil -extract "$2" "$3" -o - "$1" 2>/dev/null; }
+bwm_capture=false
+for bwm_file in "$HOME/Library/Application Support/MINDY/memories/"*.json; do
+ if [ -f "$bwm_file" ] && [ ! -L "$bwm_file" ] && [ "$(bwm_read "$bwm_file" role raw)" = capture ]; then bwm_capture=true; break; fi
 done
-if [ "$bwm_memory" = false ]; then
- printf '%s\n' BWM_MEMORY_FIRST
-elif [ -f "$bwm_root/.mindy/release-selection/active-release.json" ] && [ ! -L "$bwm_root/.mindy/release-selection/active-release.json" ] && grep -q '"version"[[:space:]]*:[[:space:]]*"[^"]\{1,\}"' "$bwm_root/.mindy/release-selection/active-release.json"; then
- printf '%s\n' BWM_ALREADY_INSTALLED
-else
+if [ "$bwm_capture" = false ]; then
+ printf '%s\n' BWM_TIMESAVER_FIRST 'Install MINDY TimeSaver first. Add MINDY TimeSaver Setup where you add plugins, and type /install-mts with your TimeSaver access code. When it has finished, type /install-bwm with your Build With Mindy code again.'
+ exit 0
+fi
+bwm_active="$bwm_root/.mindy/release-selection/active-release.json"
+bwm_version=
+if [ -f "$bwm_active" ] && [ ! -L "$bwm_active" ]; then bwm_version=$(bwm_read "$bwm_active" version raw); fi
+if [ -z "$bwm_version" ]; then
  printf '%s\n' BWM_INSTALL_READY
+ exit 0
+fi
+bwm_apps=$(bwm_read "$bwm_active" harnesses json)
+# A release from before the app list was recorded was set up in both apps.
+if [ -z "$bwm_apps" ] || [ "$(bwm_read "$bwm_active" harnesses raw)" = 0 ] || printf '%s' "$bwm_apps" | grep -q "\"$bwm_app\""; then
+ printf '%s\n' BWM_ALREADY_INSTALLED 'MINDY is already installed.' 'Would you like us to check for an update, repair MINDY, or add it to another app?'
+ case "$bwm_host" in
+  chatgpt) printf '%s\n' "If you see an anchor icon with a yellow dot under the message box, MINDY needs your okay to work in the background while you chat. Click it, then Allow all." 'Next, start a new chat with This computer selected and type /mindysetup' ;;
+  codex) printf '%s\n' 'Next, start a new chat and type /mindysetup' ;;
+  *) printf '%s\n' 'Next, start a new session and type /mindysetup' ;;
+ esac
+else
+ printf '%s\n' BWM_ADD_APP 'MINDY is installed on this computer, but it has not been added to this app yet. Would you like us to add it now?'
 fi
 ```
 
-If using file tools, read `<home>/.mindy/install-state.json` and the active receipt it names (or `<home>/mindy/.mindy/release-selection/active-release.json` when there is no home record), and the regular JSON files in `<home>/Library/Application Support/MINDY/memories`. Apply the same tests as the command. When the capture registration is gone, TimeSaver must be set up again even if the Build With Mindy folder remains. Do not print the home folder path into a tool result.
+These reads check the regular JSON files in `<home>/Library/Application Support/MINDY/memories` for top-level `role: capture`, and the active release receipt's `version` and `harnesses` in `<home>/mindy`, the one folder setup installs, updates, repairs and adds apps in. A missing app list is the older receipt for both apps. File tools must apply these same tests. They read local files only: no writes, internet, plugin execution or permission request. `plutil -extract ... -o -` prints the extracted value and does not change its file. Hide the BWM markers and paths, and relay the other output lines exactly.
 
-For `BWM_MEMORY_FIRST`, use the line for this host below, then stop. No mode switch, permission request or setup call.
+For `BWM_TIMESAVER_FIRST`, stop, with or without a code. For `BWM_ALREADY_INSTALLED`, stop, with or without a code. Give every line after the offer, in order, even when the person does not choose an update: in the ChatGPT app that is the anchor-icon line and then the next-step line. Do not compare with the latest release here: the update offer is how someone on an older release chooses that check. For `BWM_ADD_APP`, wait for the person to choose adding this app. No Manual instruction, permission request or setup call before that choice.
 
-In the ChatGPT app, identified by `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` containing `ChatGPT`: `Install MINDY TimeSaver first. Open Customize, then Plugins, then Personal, click + beside MINDY TimeSaver Setup, and type /install-mts with your access code. When it has finished, type /install-bwm with your code again.`
+Only a new install (`BWM_INSTALL_READY`), or a separate update, repair or add-app step the person has chosen, continues below. On the chosen step append `--chosen-action update`, `--chosen-action repair` or `--chosen-action add-app` to the command. A code in the original install request is never itself a choice to update or repair.
 
-In Local Code in the Claude app: `Install MINDY TimeSaver first. On the speech-bubble side of the Claude app, open Customize, then Plugins, then Discover, add MINDY TimeSaver Setup, and type /install-mts with your access code on the Local Code side. When it has finished, type /install-bwm with your code again.`
+Before a new install, check whether the person gave a code in this chat. If not, say exactly: `This needs your MINDY access code, which came in the message with your install steps. Type /install-bwm, a space and your code, all on one line.` Then stop, before Manual or permission.
 
-In the Terminal or when the host is not known: `Install MINDY TimeSaver first. Add MINDY TimeSaver Setup where you add plugins, and type /install-mts with your access code. When it has finished, type /install-bwm with your code again.`
+Before a chosen update, repair or add-app step, check the same. If not, do not ask them to type /install-bwm again: that only brings back the already-installed sentence and the choice. Say exactly: `This needs your MINDY access code, which came in the message with your install steps. Type your code on its own and send it.` Then stop, before Manual or permission. When their next message is the code on its own, carry on with the step they already chose, from the Manual sentence below: do not run the reads again and do not ask them to choose again. The setup script reads a message that is only the code.
 
-Check the person's latest /install-bwm message for a code before any Manual-mode step. The command may be a slash command, a plugin-prefixed slash command, or an install-bwm skill mention chip. A code has a membership number of 3 to 32 letters, digits or hyphens, a dot, and at least 40 signature characters (letters, digits, underscores or hyphens). A signature made of one repeated character counts only when it is at least 80 characters long. Let the server decide which product the code belongs to. A code sent on its own, without /install-bwm in that message, does not count.
+If the server says this is not a MINDY access code, relay only this sentence: `That looks like a MINDY TimeSaver code. The two products have different codes, so nothing was installed. Type /install-bwm with your Build With Mindy access code.` Do not guess that it is a test code or repeat any part of it. A malformed code still uses the copy-in-full reply below.
 
-If the person's latest message holds a code but no /install-bwm command or install-bwm skill mention, say exactly `I've received your code. Send it together with the command as one message: /install-bwm, a space and your code.` Then stop, before any Manual-mode step, permission request or setup call. Never repeat their code, and do not give the no-code sentence for this case.
+A code is a membership number of 3 to 32 letters, digits or hyphens, a dot, and exactly 86 letters, digits, underscores or hyphens. A full stop after it is punctuation. Let the server decide which product it belongs to. Never search other chats for a code.
 
-For `BWM_ALREADY_INSTALLED` with no code in that message, say exactly `MINDY is already installed.` Then give only this host's next-step line to start a new chat or session and type /mindysetup from below. No mode switch, permission request or setup call.
+In Local Code in the Claude app and in Claude Code in the Terminal, before the setup command or any permission request, say exactly: `We're about to install Build With Mindy on this computer, and Auto mode can stop an install part way. So switch the mode at the bottom of the window to Manual for now, and tell me when it shows Manual. Once it's installed, you can switch back to Auto.` If the host does not already show Manual, stop this turn and wait until the person confirms Manual or the host shows it. Switching back to Auto afterwards is the person's choice, as that sentence says, so say nothing more about it and do not wait for it. Do not give this mode instruction in either Codex host.
 
-With a code in that message, continue to the setup script for updates, repairs or adding an app, even when the folder or release receipt says MINDY is installed. Do not short-circuit this route on either file. The script checks the latest release and the apps in its record before deciding there is nothing to do.
-
-Otherwise, if there is no code in the /install-bwm message, say exactly `This needs your MINDY access code, which came in the message with your install steps. Type /install-bwm, a space and your code, all on one line.` Then stop, before any Manual-mode step, permission request or setup call.
-
-Only in Local Code in the Claude app, before the install command or any permission request, say exactly: `We're about to install Build With Mindy on this computer, and Auto mode can stop an install part way. So switch the mode at the bottom of the window to Manual for now, and tell me when it shows Manual. Once it's installed, you can switch back to Auto.` If the host does not already show Manual, stop this turn and wait until the person confirms Manual or the host shows it. The script will read the code from the person's earlier install message after the switch. After the successful install command, stop for the person to switch back to Auto before giving the next step below. Do not give the mode instruction in the ChatGPT app or the command-line app.
-
-The setup script reads the newest code-shaped token from the person's own messages in this chat's file on the Mac, locating it by the current host session id as /mindysave does. It ignores assistant and tool text, and earlier-session rows in a resumed Claude file. A newer /install-bwm message with no code clears an earlier code. Never read that message through an AI tool, print the code, construct a here-document with it, put it in arguments, tool stdin, an environment assignment, a justification, a description or a log. Run this one command and relay its sentences:
+Run exactly one setup command, with no tool stdin, here-document or code-bearing environment variable:
 
 ```sh
-<script> --code-from-chat
+<script> --code-from-chat --app <current app> --session-id "<current session id>"
 ```
 
-The script uses `CLAUDE_CODE_SESSION_ID` (or `CLAUDE_SESSION_ID`) in Claude Code, and `CODEX_THREAD_ID` (or `CODEX_SESSION_ID`) in the ChatGPT app. If the host supplies its current session id separately instead, append `--session-id "<current session id>"`. Use only this chat's host-provided id, never the newest file, a guessed id, another chat, or a search for the code. With no code, the script gives the no-code sentence above. When the chat file cannot be found or read, or its format is unsuitable, it says `Setup could not read your code from this chat. Start a new chat and type /install-bwm with your code there.` Relay that one sentence and stop. Never fall back to putting the code in a command or a permission request.
+Use this chat's host-provided session id only. In Claude Code use `CLAUDE_CODE_SESSION_ID` or `CLAUDE_SESSION_ID`, or the current session id the host gives you. In Codex use `CODEX_THREAD_ID`. Never use the newest file or guess an id. The script uses TimeSaver's already-installed Bun to read the Claude Code file named for that session under its projects folder, or the Codex file whose first metadata row matches the thread id under its sessions folder. It reads only user messages in that chat. Its answer goes into the setup process, never a tool output or temporary file. If there is no code, it prints the no-code sentence above for a new install, or the code-on-its-own sentence for a chosen step; relay it and stop. The newest message that holds anything shaped like a code decides, wherever the code sits in it and even when it is wrong: if that message does not hold exactly one valid code and nothing else shaped like one (a code one character short or long, say, or two codes), the script prints `This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then type /install-bwm with it.`, or for a chosen step `This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then send it on its own.`, and never uses an earlier code instead; relay it and stop. After the chosen-step sentence, a next message that is the code on its own carries on with the step already chosen, as above. If this chat cannot be identified or read, it prints `We could not read your code from this chat. Start a new chat and type /install-bwm with your code there.` Relay it and stop; typing again in an unreadable chat cannot help. If TimeSaver's reader cannot run, it prints `MINDY TimeSaver needs repairing before we can read your code. Type /install-mts with your TimeSaver access code, then try /install-bwm again.` Relay it and stop. Never fall back to showing a code in a command or permission box.
 
-The script tries TimeSaver's Bun first, then the Mac's built-in JavaScript reader if Bun is missing, not executable, a symlink or unable to run. If neither reader can run, it says `MINDY TimeSaver needs repairing. Install MINDY TimeSaver again with /install-mts and your TimeSaver access code, then type /install-bwm with your code again.` Relay that sentence and stop; a new chat cannot repair TimeSaver.
+Use these tool labels exactly:
 
-Every permission title, Bash description and running line you supply is `Install Build With Mindy`. After success, use `Installed Build With Mindy`. Never call this step a download.
+- Permission title: `Install Build With Mindy`
+- Permission description or justification: `Install Build With Mindy in your home folder and add it to your apps.`
+- Running line or Bash description: `Install Build With Mindy`
+- Successful running line: `Installed Build With Mindy`
 
-In Claude Code, `<script>` is `"${CLAUDE_PLUGIN_ROOT}/scripts/mindy-setup.sh"`. In Local Code in the Claude app, append `--claude-local` after `--code-from-chat`. This registers the private full plugin at user scope, using the CLI when present and the same local records when it is absent.
+In Claude Code, `<script>` is `"${CLAUDE_PLUGIN_ROOT}/scripts/mindy-setup.sh"`. In Local Code in the Claude app, append `--claude-local`. This registers the private full plugin at user scope, using the CLI when present and the same local records when it is absent.
 
-In the ChatGPT app (Codex), this skill's `SKILL.md` was given to you by its absolute path, and the plugin folder is two levels above the `install-bwm` skill folder, so `<script>` is `<plugin folder>/scripts/mindy-setup.sh`.
+In the ChatGPT app (Codex), this skill's `SKILL.md` was given to you by its absolute path, and the plugin folder is two levels above the `install-bwm` skill folder, so `<script>` is the quoted absolute path `<plugin folder>/scripts/mindy-setup.sh`.
 
-The script must run with network access and outside the sandbox: it installs Build With Mindy from MINDY's server and saves it in the person's home folder, outside the current folder. Inside the sandbox it cannot reach the server, and it would then wrongly tell the person to check they are online. Never run it inside the sandbox first to see whether it works. Run it outside the sandbox from the first try, by your app's own way of doing that: in Claude Code, whose sandbox is off unless the person turned it on, run the command with the sandbox disabled (`dangerouslyDisableSandbox: true`) only when your Bash tool's instructions describe a sandbox, and otherwise run it as an ordinary command without `dangerouslyDisableSandbox`; in the ChatGPT app (Codex), make the one request the next paragraph describes. If your app will ask the person before it runs the command, first say exactly `Setup needs to reach the internet and save MINDY in your home folder. When your app asks, allow it this once.` In Local Code in the Claude app when the current mode is Manual, always say that allow-it-this-once sentence immediately before the install command or its permission request. Otherwise, if your app can run the command outside the sandbox without asking (Codex set to never ask or to full access), just run it, without that sentence. Only if the person declines, do not run it, and say exactly `Setup needs that permission to install MINDY. Ask me again when you're ready.` In Claude Code, if the tool result says the setup command was denied by the auto mode classifier, do not run it again and do not suggest adding permission rules or changing settings; say exactly `Claude Code's auto mode stopped setup. Press Shift and Tab together until the line under the box says manual mode on. Then press the up arrow, press Return, and choose Yes (not the don't ask again option) when Claude Code asks.`
+The script must run with network access and outside the sandbox: it gets the signed install package from MINDY's server and saves it in the person's home folder, outside the current folder. Inside the sandbox it cannot reach the server, and it would then wrongly tell the person to check they are online. Never run it inside the sandbox first to see whether it works. Run it outside the sandbox from the first try, by your app's own way of doing that: in Claude Code, whose sandbox is off unless the person turned it on, run the command with the sandbox disabled (`dangerouslyDisableSandbox: true`) only when your Bash tool's instructions describe a sandbox, and otherwise run it as an ordinary command without `dangerouslyDisableSandbox`; in the ChatGPT app (Codex), make the one request the next paragraph describes. If your app will ask the person before it runs the command, first say exactly `Setup needs to reach the internet and save Build With Mindy in your home folder. When your app asks, allow it this once.` In Local Code in the Claude app when the current mode is Manual, always say that allow-it-this-once sentence immediately before the setup command or its permission request. Otherwise, if your app can run the command outside the sandbox without asking (Codex set to never ask or to full access), just run it, without that sentence. Only if the person declines, do not run it, and say exactly `Setup needs that permission to install Build With Mindy. Ask me again when you're ready.` In Claude Code, if the tool result says the setup command was denied by the auto mode classifier, do not run it again and do not suggest adding permission rules or changing settings; say exactly `Auto mode stopped setup, because it's careful about anything that installs from the internet - fair enough. Press Shift and Tab together until the line under the box says manual mode on. Then press the up arrow, press Return, and choose Yes (not the don't ask again option) when it asks, and setup will carry on.`
 
-In the ChatGPT app (Codex), the app lets the command reach the internet and edit only the folders you ask for, and setup edits three folders in the person's home folder: `mindy`, where MINDY goes; `.mindy`, where setup keeps its install files and its notes; and `.codex`, where setup adds MINDY to this app. Asking for fewer stops setup part way, and asking again for each missing folder means another stop each time. So make one request, before setup runs, for the internet and all of these folders together. Resolve `<home>` from the host-provided environment or ordinary file-tool path metadata, keeping it internal. Do not run a command that prints the home folder path. Check whether Claude Code is on this Mac with this ordinary sandbox command: `if command -v claude >/dev/null 2>&1; then printf '%s\n' BWM_CLAUDE_PRESENT; fi`. That marker means setup adds MINDY to Claude Code as well, so `<home>/.claude` is a fourth folder in the same request. Then call the `request_permissions` tool once, with `{"network": {"enabled": true}, "file_system": {"write": ["<home>/mindy", "<home>/.mindy", "<home>/.codex"]}}`, adding `"<home>/.claude"` to that list when Claude Code is on this Mac. Say the sentence above about allowing it this once just before this call. The app then asks the person once to let it connect to the internet and edit those folders. Never ask for the folders one at a time. When the person allows it, run the setup command straight away, in the same turn, as an ordinary command with no `sandbox_permissions`. Only if the `request_permissions` tool is not offered to you, instead run the setup command once with escalated permissions (`sandbox_permissions: "require_escalated"`) and a one-line justification, such as `Install Build With Mindy`, which never contains the code. When Codex is set to never ask or to full access, request nothing, give no `sandbox_permissions` and just run it, as the paragraph above says.
+In the ChatGPT app (Codex), the app lets the command reach the internet and edit only the folders you ask for, and setup edits three folders in the person's home folder: `mindy`, where MINDY goes; `.mindy`, where setup keeps its install package and its notes; and `.codex`, where setup adds MINDY to this app. Asking for fewer stops setup part way, and asking again for each missing folder means another stop each time. So make one request, before setup runs, for the internet and all of these folders together. First, with one ordinary command inside the sandbox, which asks the person nothing, find the full path of the person's home folder and whether Claude Code is on this computer too: `printf '%s\n' "$HOME"; if command -v claude >/dev/null 2>&1 || test -x "$HOME/.local/bin/claude" || test -x "$HOME/.claude/local/claude"; then printf '%s\n' BWM_CLAUDE_PRESENT; fi`. Its first line is `<home>`. A second line means Claude Code is on this computer and setup adds MINDY to it as well, so `<home>/.claude` is a fourth folder in the same request. Then call the `request_permissions` tool once, with `{"network": {"enabled": true}, "file_system": {"write": ["<home>/mindy", "<home>/.mindy", "<home>/.codex"]}}`, adding `"<home>/.claude"` to that list when Claude Code is on this computer. Say the sentence above about allowing it this once just before this call. The app then asks the person once to let it connect to the internet and edit those folders. Never ask for the folders one at a time. When the person allows it, run the setup command straight away, in the same turn, as an ordinary command with no `sandbox_permissions`. Only if the `request_permissions` tool is not offered to you, instead run the setup command once with escalated permissions (`sandbox_permissions: "require_escalated"`) and a one-line justification, such as `Install Build With Mindy in your home folder and add it to your apps.`, which never contains the code. When Codex is set to never ask or to full access, request nothing, give no `sandbox_permissions` and just run it, as the paragraph above says.
 
-When the script stops before it finishes, relay every line it printed, exactly as printed and in order. If it says `MINDY is already installed.`, relay that sentence and give only this host's next-step line to start a new chat or session and type /mindysetup from below.
+When the script stops before it finishes, relay every line it printed, exactly as printed and in order. When it says `MINDY is already installed.`, relay it, offer `Would you like us to check for an update, repair MINDY, or add it to another app?`, then give this host's lines below. Run no further script unless the person chooses a step.
 
-When the script's sentence is `Build With Mindy is now in a folder called mindy in your home folder.`, relay it, then say the lines under your app's heading below, exactly, one per line, and nothing else but the pets line described after them. Relay no other line the script printed.
+At the successful install sentence below, place `![MINDY](<${CLAUDE_PLUGIN_ROOT}/assets/mindy-message-icon.png>)` beside that sentence in the reply. Resolve `${CLAUDE_PLUGIN_ROOT}` to this plugin's absolute folder supplied by the host, or move up two directories from the folder containing this skill file. Render the picture inline, never as a text link or inside a code block. Use the same picture placement in every app.
 
-In Claude Code:
+When it says `Build With Mindy is now in a folder called mindy in your home folder.`, relay it, then give this host's lines below exactly, one per line, in order. You cannot see the person's window, so in the ChatGPT app always give the anchor-icon line, before the next-step line, after a new install, an update, a repair, adding the app, and the already-installed outcome alike; it is worded so it applies only when they see the icon. Do not wait for a reply between the two lines. Never give the anchor-icon line in any other app.
+
+In Claude Code (the Claude app and the Terminal):
 
 Next, start a new session and type /mindysetup
 
-In the ChatGPT app (Codex):
+In the ChatGPT app:
 
-If an anchor icon with a yellow dot shows under the message box, click it and choose Allow all.
+If you see an anchor icon with a yellow dot under the message box, MINDY needs your okay to work in the background while you chat. Click it, then Allow all.
 Next, start a new chat with This computer selected and type /mindysetup
 
-Allow all approves Build With Mindy's hooks. Keep that explanation internal unless the person asks what Allow all does.
+In Codex outside the ChatGPT app:
 
-When the script also printed the line `MINDY's Codex pet is in place.` and you are in the ChatGPT app (Codex), then after the steps above say `MINDY is now in your Codex pets list, and you can choose it there.` Without that line from the script, say nothing about a pet. Never relay the script's pet line itself.
+Next, start a new chat and type /mindysetup
 
-Never print the code back. Read only the local registration and install receipts for the early checks. Only the script reads this chat for the code. Do not read or change unrelated folders.
+When the script also printed the line `MINDY's Codex pet is in place.` and you are in the ChatGPT app (Codex), then after the steps above say `MINDY's in your pets list now too, if you'd like to choose it.` Without that line from the script, say nothing about a pet. Never relay the script's pet line itself.
+
+Never print the code back. Never read or change any other folder.

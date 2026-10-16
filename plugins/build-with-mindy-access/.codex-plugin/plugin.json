@@ -1,12 +1,12 @@
 {
   "name": "build-with-mindy-access",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Set up Build With Mindy with your access code.",
   "skills": "./skills/",
   "interface": {
     "displayName": "Build With Mindy Setup",
     "shortDescription": "Set up Build With Mindy with your access code.",
-    "developerName": "MINDY",
+    "developerName": "Mindy",
     "brandColor": "#0099FF",
     "composerIcon": "./assets/mindy.png",
     "logo": "./assets/mindy.png"
