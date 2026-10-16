@@ -1,23 +1,24 @@
 {
   "name": "mindy",
   "owner": {
-    "name": "MINDY"
+    "name": "Mindy"
   },
   "description": "The public MINDY marketplace.",
   "plugins": [
     {
+      "name": "build-with-mindy-access",
+      "source": "./plugins/build-with-mindy-access",
+      "displayName": "Build With Mindy Setup"
+    },
+    {
       "name": "mindy-timesaver-access",
-      "source": "./plugins/mindy-timesaver-access"
+      "source": "./plugins/mindy-timesaver-access",
+      "displayName": "MINDY TimeSaver Setup"
     },
     {
       "name": "timesaver",
       "source": "./plugins/timesaver",
       "displayName": "MINDY TimeSaver"
-    },
-    {
-      "name": "build-with-mindy-access",
-      "source": "./plugins/build-with-mindy-access",
-      "displayName": "Build With Mindy Setup"
     }
   ]
 }

@@ -19,24 +19,24 @@ def digest(value):
 def prepare(data):
     marker = data['marker']
     if marker.get('format') != 'mts.connected-folder.v1' or marker.get('product') != 'mts':
-        raise ValueError('Click + beside the message box, choose Add folder, and pick the folder called timesaver in your home folder. Then type /mindyend again.')
+        raise ValueError("I can't see your saves folder in this chat yet. Click + beside the message box, choose Add folder and pick the folder called timesaver in your home folder. Then type /mindyend again.")
     privacy = data['privacy']
     if not isinstance(privacy, dict) or type(privacy.get('off')) is not bool:
-        raise ValueError('MINDY TimeSaver could not read your saving setting. Saving has stopped.')
+        raise ValueError("MINDY TimeSaver couldn't read whether saving's switched on or off, so to be safe it hasn't saved anything. Type /timesaver-on to reset it, then try again.")
     if privacy['off']:
         raise ValueError("I can't save this session because MINDY TimeSaver is switched off. Type /timesaver-on to switch it on, then type /mindyend to save this session.")
     session = data['sessionId']
     slug = data['slug']
     if not isinstance(session, str) or not session.strip() or len(session) > 1024:
-        raise ValueError('MINDY TimeSaver could not identify this running session. Saving has stopped.')
+        raise ValueError("MINDY TimeSaver couldn't tell which session this is, so it hasn't saved anything. Type /mindyend again, and if it happens a second time, type /mindyteam and let us know.")
     if not re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug):
-        raise ValueError('MINDY TimeSaver could not name this session. Saving has stopped.')
+        raise ValueError("MINDY TimeSaver couldn't give this session a name, so it hasn't saved anything yet. Type /mindyend again.")
     entries = data['entries']
     if not entries or sum(e.get('type') == 'summary' for e in entries) != 1:
         raise ValueError('MINDY TimeSaver needs one summary of the whole session.')
     for entry in entries:
         if entry.get('type') not in ['summary', 'observation', 'request', 'decision', 'commitment', 'action'] or not isinstance(entry.get('content'), str) or not entry['content'].strip():
-            raise ValueError('MINDY TimeSaver could not prepare this session. Saving has stopped.')
+            raise ValueError("MINDY TimeSaver couldn't get this session ready to save, so nothing's been saved yet. Type /mindyend again.")
     entries = [dict(type=e['type'], content=e['content'].strip()) for e in entries]
     stamp = data['timestamp']
     date = datetime.datetime.fromisoformat(stamp.replace('Z', '+00:00')).astimezone(ZoneInfo(marker['timezone'])).date().isoformat()

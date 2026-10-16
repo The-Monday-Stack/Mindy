@@ -1,14 +1,15 @@
 {
   "name": "timesaver",
-  "description": "MINDY TimeSaver keeps your chats.",
-  "version": "1.2.0",
+  "description": "MINDY TimeSaver keeps what you asked, decided and did, so your AI can pick up where you left off.",
+  "version": "1.3.0",
   "author": {
-    "name": "MINDY TimeSaver"
+    "name": "Mindy"
   },
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",
   "interface": {
     "displayName": "MINDY TimeSaver",
+    "developerName": "Mindy",
     "logo": "./assets/mindy.png",
     "composerIcon": "./assets/mindy.png"
   }

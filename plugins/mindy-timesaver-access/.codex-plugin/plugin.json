@@ -1,10 +1,11 @@
 {
   "name": "mindy-timesaver-access",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Set up MINDY TimeSaver with your access code.",
   "skills": "./skills/",
   "interface": {
     "displayName": "MINDY TimeSaver Setup",
+    "developerName": "Mindy",
     "logo": "./assets/mindy.png",
     "composerIcon": "./assets/mindy.png"
   }
