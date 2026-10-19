@@ -1,0 +1,3 @@
+interface:
+  display_name: "Install MTS"
+  short_description: "Use /install-mts with your access code."

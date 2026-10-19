@@ -33,7 +33,7 @@ In Claude Code, run the commands below as written: the app replaces `${CLAUDE_PL
 Before reading any transcript or preparing a chat copy, run:
 
 ```sh
-"${CLAUDE_PLUGIN_ROOT}/scripts/bun-runtime.sh" timesaver-install/runtime/privacy.ts save-check
+"${CLAUDE_PLUGIN_ROOT}/scripts/bun-runtime.sh" timesaver-install/runtime/privacy.ts save-check || test "$?" -eq 2
 ```
 
 If a command returns `MTS_SAVE_REFUSED` because saving is off, say exactly: `I can't save this chat because MINDY TimeSaver is switched off. Type /timesaver-on to switch it on, then type /mindysave again.` If it refuses because the saving setting is unreadable, say exactly: `MINDY TimeSaver couldn't read whether saving's switched on or off, so to be safe it hasn't saved anything. Type /timesaver-on to reset it, then try again.` For any other refusal, relay its following message word for word. Hide the marker and stop. Never give a success confirmation for a refusal or a failed command.

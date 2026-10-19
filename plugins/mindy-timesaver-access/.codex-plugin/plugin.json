@@ -1,6 +1,6 @@
 {
   "name": "mindy-timesaver-access",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Set up MINDY TimeSaver with your access code.",
   "skills": "./skills/",
   "interface": {

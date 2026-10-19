@@ -164,7 +164,7 @@ Use /mindyhelp for a reminder of these instructions.
 Here's what to do right now to immediately save time with your TimeSaver...
 
 1. Choose at least three of your most important recent sessions where you had ideas and made decisions which you don't want to forget and you want a future AI to know.
-2. Select one of these chats in your left hand column.
+2. Open one of these chats in the app.
 3. Type /mindyend at the bottom of the chat.
 4. Mindy will save every time you asked, decided or did something important to your TimeSaver.
 5. When you want to pick up that project again, type /mindyload [subject] or /mindyload alone to select a saved session.
@@ -172,7 +172,7 @@ Here's what to do right now to immediately save time with your TimeSaver...
 
 (And use /mindysearch to find anything in your entire TimeSaver.)
 
-Remember: Mindy TimeSaver gets more valuable the more you use it. So don't forget: When you want to save time by saving time - always /mindyend.
+Remember: Mindy TimeSaver gets more valuable the more you use it. So don't forget: When you want to save time by saving time, always /mindyend.
 MTS_HOW_TO
 }
 read_content_root() {
@@ -303,12 +303,13 @@ step_count=0
 main_files=
 watch_files=
 # Copies what a step's holder reports into files setup reads: the group's
-# number, then the step's exit status. It ends when the step and its holder have
-# both closed the pipe, and no stop signal ends it before then.
+# number and the step's exit status. It ends once both values are recorded,
+# even if another process still holds the pipe open. No stop signal ends it.
 step_reader() {
  trap '' HUP INT TERM
  while IFS= read -r step_line; do
   case "$step_line" in g*) printf '%s\n' "${step_line#g}" >"$1.group" ;; s*) printf '%s\n' "${step_line#s}" >"$1.status" ;; esac
+  if [ -f "$1.group" ] && [ -f "$1.status" ]; then break; fi
  done
 }
 # Usage: step_open <main|watch>; then step_exec <folder> <command...> in the
@@ -638,7 +639,7 @@ fail_as() { finished=true; reason="Setup stopped while $step. $1"; report_stop "
 fail_transfer() { if [ "$1" = 28 ]; then fail_as "$stalled_transfer"; fi; fail_as "$unreachable"; }
 
 if [ "$from_chat" = true ]; then
- [ "$(uname -s)" = Darwin ] || { printf '%s\n' 'Setup needs to run on this computer. Click the </> button, choose Local and run /install-mts there.'; exit 1; }
+ [ "$(uname -s)" = Darwin ] || { printf '%s\n' 'Setup needs to run on this computer. Click the </> button, choose This computer and run /install-mts there.'; exit 1; }
  step='reading your code from this chat'
  # The reader runs in the background as a recorded step (see Steps), so a stop
  # ends it and waits for it before the interruption sentence, however long its
@@ -677,7 +678,7 @@ plugin_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd -P) || fail_as "$generic
 home=${HOME:-}
 [ -n "$home" ] || fail_as "$generic"
 step='checking this computer can run MINDY TimeSaver'
-[ "$(uname -s)" = Darwin ] || fail_as 'Setup needs to run on this computer. Click the </> button, choose Local and run /install-mts there.'
+[ "$(uname -s)" = Darwin ] || fail_as 'Setup needs to run on this computer. Click the </> button, choose This computer and run /install-mts there.'
 step='finding your saves folder'
 read_content_root || fail_as "$generic"
 if [ -x "$home/.timesaver/bin/bun" ] && [ ! -f "$home/.timesaver/install-transaction.json" ] && { [ -f "$home/.timesaver/install-state.json" ] || [ -f "$home/.timesaver/kept-saves.json" ]; }; then

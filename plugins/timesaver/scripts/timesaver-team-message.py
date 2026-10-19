@@ -19,8 +19,8 @@ SENT = 'Your message has been sent to Team MINDY.'
 DUPLICATE = 'Your message was already sent to Team MINDY.'
 UNREACHABLE = "Your message hasn't reached us yet, because MINDY TimeSaver couldn't get through just now. Check you're online - your words are kept right here."
 ALLOW_DOMAIN = "This chat isn't allowed to reach us yet, so your message hasn't been sent. Open Settings, then Capabilities, and add gate.mindy.build under Additional allowed domains."
-NO_CODE = "MINDY TimeSaver couldn't read your access code from the connected folder, so your message hasn't been sent. Click the </> button, choose Local and type /install-mts with your access code there. Then come back to this chat."
-NOT_HERE = "MINDY TimeSaver can't send your message from this chat. Click the </> button, choose Local and type /mindyteam there."
+NO_CODE = "MINDY TimeSaver couldn't read your access code from the connected folder, so your message hasn't been sent. Click the </> button, choose This computer and type /install-mts with your access code there. Then come back to this chat."
+NOT_HERE = "MINDY TimeSaver can't send your message from this chat. Click the </> button, choose This computer and type /mindyteam there."
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):

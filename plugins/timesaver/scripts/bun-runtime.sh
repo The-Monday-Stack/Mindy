@@ -23,8 +23,41 @@ if [ -z "$content_root" ] && [ -f "$MTS_STATE_ROOT/install-state.json" ]; then
  content_root=$(cd "$MTS_STATE_ROOT" && "$bun" -e 'const state = await Bun.file(process.argv[1]).json(); process.stdout.write(typeof state.contentRoot === "string" ? state.contentRoot : process.env.HOME + "/timesaver");' "$MTS_STATE_ROOT/install-state.json")
 fi
 if [ -z "$content_root" ]; then setup_missing; fi
+folder_place() {
+ folder_name=${content_root##*/}
+ parent_place=${content_root%/*}
+ case "$content_root" in
+  "$HOME/timesaver") printf '%s' 'in a folder called timesaver in your home folder'; return ;;
+ esac
+ case "$parent_place" in
+  "$HOME") printf 'in a folder called %s in your home folder' "$folder_name" ;;
+  "$HOME/Desktop") printf 'on your Desktop, in a folder called %s' "$folder_name" ;;
+  "$HOME/Documents") printf 'in your Documents, in a folder called %s' "$folder_name" ;;
+  "$HOME/Library/CloudStorage/GoogleDrive-"*"/My Drive") printf 'in your Google Drive, in a folder called %s' "$folder_name" ;;
+  "$HOME/Library/CloudStorage/GoogleDrive-"*"/My Drive/"*) printf 'in your Google Drive, inside %s, in a folder called %s' "$(printf '%s' "${parent_place#*/My Drive/}" | sed 's|/|, then |g')" "$folder_name" ;;
+  "$HOME/Library/CloudStorage/Dropbox"|"$HOME/Library/CloudStorage/Dropbox/"*|"$HOME/Library/CloudStorage/Dropbox-"*|"$HOME/Library/CloudStorage/OneDrive"|"$HOME/Library/CloudStorage/OneDrive/"*|"$HOME/Library/CloudStorage/OneDrive-"*)
+   cloud_place=${parent_place#"$HOME/Library/CloudStorage/"}
+   provider_root=${cloud_place%%/*}
+   case "$provider_root" in
+    Dropbox|Dropbox-*) provider_name=Dropbox ;;
+    OneDrive|OneDrive-*) provider_name=OneDrive ;;
+   esac
+   if [ "$cloud_place" = "$provider_root" ]; then
+    printf 'in your %s, in a folder called %s' "$provider_name" "$folder_name"
+   else
+    printf 'in your %s, inside %s, in a folder called %s' "$provider_name" "$(printf '%s' "${cloud_place#*/}" | sed 's|/|, then |g')" "$folder_name"
+   fi
+   ;;
+  "$HOME/Library/Mobile Documents/com~apple~CloudDocs") printf 'in your iCloud Drive, in a folder called %s' "$folder_name" ;;
+  "$HOME/Library/Mobile Documents/com~apple~CloudDocs/"*) printf 'in your iCloud Drive, inside %s, in a folder called %s' "$(printf '%s' "${parent_place#*/com~apple~CloudDocs/}" | sed 's|/|, then |g')" "$folder_name" ;;
+  "$HOME"/*) printf 'in your home folder, inside %s, in a folder called %s' "$(printf '%s' "${parent_place#"$HOME"/}" | sed 's|/|, then |g')" "$folder_name" ;;
+  /Volumes/*) printf 'on %s, in a folder called %s' "$(printf '%s' "${parent_place#/Volumes/}" | sed 's|/|, then |g')" "$folder_name" ;;
+  *) printf 'in a folder called %s, inside %s' "$folder_name" "${parent_place##*/}" ;;
+ esac
+}
+
 folder_unreachable() {
- printf '%s\n' 'MTS_SAVE_REFUSED' "MINDY TimeSaver cannot reach your saves folder at $content_root. Reconnect its disk or cloud folder, then try again. Your existing saves have not been changed." >&2
+ printf '%s\n' 'MTS_SAVE_REFUSED' "MINDY TimeSaver cannot reach your saves folder $(folder_place). Reconnect its disk or cloud folder, then try again. Your existing saves have not been changed." >&2
  exit 1
 }
 if [ ! -d "$content_root" ]; then folder_unreachable; fi
@@ -38,7 +71,7 @@ export MTS_CONTENT_ROOT
 cd "$MTS_CONTENT_ROOT"
 
 # Setting commands and session start run even while saving is off.
-# Manual writers need the app's session id. The worker needs only the current setting.
+# Manual writers need the app's session id. Capture and scheduled compression need only the current setting.
 case "${1:-}:${2:-}" in
  timesaver-install/runtime/memory.ts:write-memory|timesaver-install/runtime/memory.ts:save-chat|timesaver-install/runtime/memory.ts:landmark)
   if [ "${2:-}" = write-memory ] && [ "${3:-}" = --quote-labels ] && [ "$#" -eq 3 ]; then :; else
@@ -55,7 +88,9 @@ case "${1:-}" in
  *)
   if [ "${2:-}" = --quote-labels ] && [ "$#" -eq 2 ]; then :; else
    case "${1:-}" in
-    *timesaver-capture-worker.ts) gate=check ;;
+    *timesaver-capture-worker.ts|\
+    MY-MIND/MY-SYSTEM/daemons/DailyCompress.daemon.ts|MY-MIND/MY-SYSTEM/daemons/WeeklyCompress.daemon.ts|MY-MIND/MY-SYSTEM/daemons/MonthlyCompress.daemon.ts|MY-MIND/MY-SYSTEM/daemons/QuarterlyCompress.daemon.ts|MY-MIND/MY-SYSTEM/daemons/YearlyCompress.daemon.ts|\
+    "$MTS_CONTENT_ROOT"/MY-MIND/MY-SYSTEM/daemons/DailyCompress.daemon.ts|"$MTS_CONTENT_ROOT"/MY-MIND/MY-SYSTEM/daemons/WeeklyCompress.daemon.ts|"$MTS_CONTENT_ROOT"/MY-MIND/MY-SYSTEM/daemons/MonthlyCompress.daemon.ts|"$MTS_CONTENT_ROOT"/MY-MIND/MY-SYSTEM/daemons/QuarterlyCompress.daemon.ts|"$MTS_CONTENT_ROOT"/MY-MIND/MY-SYSTEM/daemons/YearlyCompress.daemon.ts) gate=check ;;
     *) gate=save-check ;;
    esac
    if [ "$gate" = check ]; then

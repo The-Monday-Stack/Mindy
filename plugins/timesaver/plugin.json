@@ -1,6 +1,6 @@
 {
   "name": "timesaver",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "MINDY TimeSaver keeps what you asked, decided and did, so your AI can pick up where you left off.",
   "author": {
     "name": "Mindy"
@@ -8,7 +8,7 @@
   "extensions": {
     "com.openai": {
       "skills": "./skills/",
-      "hooks": "./hooks/hooks.json",
+      "hooks": "./hooks/hooks-codex.json",
       "interface": {
         "displayName": "MINDY TimeSaver",
         "developerName": "Mindy",
