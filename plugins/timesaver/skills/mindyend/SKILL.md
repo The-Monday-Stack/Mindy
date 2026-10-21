@@ -2,7 +2,7 @@
 name: mindyend
 description: Use /mindyend to record what you asked, decided and did in this session to your MINDY TimeSaver (MTS).
 user-invocable: true
-version: 1.4.0
+version: 1.4.1
 ---
 
 Keep routine checks and successful writes silent. Never announce a skill name, markers, registration, settings checks or your working notes. Use a short ordinary tool description instead of the command text. Send each fixed question or confirmation once, verbatim, in its own message when specified. Do not paraphrase it or join it to the next question.

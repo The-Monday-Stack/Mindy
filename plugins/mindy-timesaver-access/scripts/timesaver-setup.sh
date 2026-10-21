@@ -15,6 +15,8 @@ stalled_transfer="The connection to MINDY TimeSaver's install server made no pro
 app_stalled="Your app made no progress adding MINDY TimeSaver for 2 minutes, so setup stopped it and undid this setup's changes. Check you are online, then $start with your access code again."
 interrupted="Setup stopped because it was interrupted. $capital with your access code to start again."
 generic="It's safe to run setup again, so type /install-mts with your access code to have another go."
+update_offer="Would you like me to check for a MINDY TimeSaver update?"
+saved_code_missing="MINDY TimeSaver couldn't find your access code saved on this computer, so it can't check for an update. $capital, a space and your code, all on one line, and setup will update MINDY TimeSaver with it."
 
 # JXA is supplied by macOS, including before our Bun runtime is installed.
 # Only the identified chat is opened. Its contents never enter command arguments.
@@ -220,6 +222,7 @@ unset code chat_code_copy chat_pipe
 code=
 account_plugin=false
 from_chat=false
+chosen_action=
 chat_file=
 chat_harness=
 chat_id=
@@ -229,6 +232,12 @@ done
 while [ "$#" -gt 0 ]; do
  case "$1" in
   --code-from-chat|--account-plugin) shift ;;
+  # The update the person chose after the already-installed offer. It uses the
+  # code saved on this computer, never a chat.
+  --chosen-action)
+   shift; chosen_action=${1:-}
+   [ "$chosen_action" = update ] && [ "$from_chat" = false ] || { printf '%s\n' 'Setup reads your code from this chat. Use /install-mts with your code in the message box to start.'; exit 1; }
+   shift ;;
   --claude-session|--codex-thread)
    case "$1" in --claude-session) chat_harness=claude ;; --codex-thread) chat_harness=codex ;; esac
    shift; chat_id=${1:-}; [ -n "$chat_id" ] || { printf '%s\n' "$chat_unreadable"; exit 1; }; shift ;;
@@ -663,11 +672,39 @@ if [ "$from_chat" = true ]; then
  if [ -z "$code" ]; then printf '%s\n' "$no_code"; exit 1; fi
  step='starting MINDY TimeSaver setup'
 fi
+installed_version=
+if [ "$chosen_action" = update ]; then
+ # Only a finished install is updated. An unfinished one still needs its code typed.
+ if [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then
+  installed_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.timesaver/install-state.json" | head -n 1)
+  # The code saved at install (see access-code-file.ts) is read here, at the
+  # moment of use, by the shell itself: it never enters a command's arguments,
+  # a file or the output. The checks match that file's own reader: a private
+  # plain file of this account, in folders that are not links.
+  saved_code_file="$HOME/.timesaver/access-code/timesaver-access-code"
+  if [ ! -L "$HOME/.timesaver" ] && [ ! -L "$HOME/.timesaver/access-code" ] && [ -f "$saved_code_file" ] && [ ! -L "$saved_code_file" ] && [ -O "$saved_code_file" ] && [ -r "$saved_code_file" ]; then
+   IFS= read -r code <"$saved_code_file" || :
+  fi
+  # A saved code has the issued shape: 3 to 32 letters, digits or hyphens, a
+  # dot, and the 86-character signature.
+  saved_number=${code%%.*}; saved_signature=${code#*.}
+  case "$code" in ''|*[!A-Za-z0-9._-]*) code= ;; esac
+  case "$saved_number" in ''|*[!A-Za-z0-9-]*) code= ;; esac
+  case "$saved_signature" in *.*) code= ;; esac
+  if [ "${#saved_number}" -lt 3 ] || [ "${#saved_number}" -gt 32 ] || [ "${#saved_signature}" -ne 86 ]; then code=; fi
+  saved_number=; saved_signature=
+  if [ -z "$code" ]; then printf '%s\n' "$saved_code_missing"; exit 1; fi
+ else
+  printf '%s\n' "$no_code"; exit 1
+ fi
+fi
 # An unfinished setup retains its transaction until app registration succeeds.
 if [ -z "$code" ] && [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then
  read_content_root
  printf '%s\n' "MINDY TimeSaver is already installed $(folder_place)."
  show_help
+ # The update runs only when the person says yes (see the install-mts skill).
+ printf '\n%s\n' "$update_offer"
  exit 0
 fi
 if [ -z "$code" ]; then printf '%s\n' "$no_code"; exit 0; fi
@@ -704,6 +741,11 @@ case "$version" in [0-9]*.[0-9]*.[0-9]*) ;; *) fail_as "$unsigned" ;; esac
 entry=$(sed -n "s/.*\"$version\"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\1/p" "$packument" | head -n 1)
 integrity=$(printf '%s\n' "$entry" | sed -n 's/.*"integrity"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 case "$integrity" in sha512-*) ;; *) fail_as "$unsigned" ;; esac
+if [ "${chosen_action:-}" = update ] && [ "$version" = "${installed_version:-}" ]; then
+ finished=true
+ printf '%s\n' "MINDY TimeSaver is already up to date, at version $version, so nothing has changed. You can carry on using it as you are."
+ exit 0
+fi
 
 archive="$tmp/mts.tgz"
 step='installing the MINDY TimeSaver release'
@@ -1007,10 +1049,12 @@ if [ "$had_previous" = false ]; then
  run_step /usr/bin/env MTS_STATE_ROOT="$state_root" "$bun" "$content_root/timesaver-install/runtime/privacy.ts" reports-on >/dev/null 2>&1 || { rollback_registration; fail_as "$generic"; }
 fi
 run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --finalize >/dev/null 2>&1 || { rollback_registration; fail_as "$generic"; }
-if [ "$account_plugin" = true ]; then printf '%s\n' '{"stage":"chat-keeping"}' >"$state_root/setup-progress.json"; fi
+if [ "$account_plugin" = true ] && [ "${chosen_action:-}" != update ]; then printf '%s\n' '{"stage":"chat-keeping"}' >"$state_root/setup-progress.json"; fi
 
 if [ -f "$state_root/memory-note-warning.txt" ]; then cat "$state_root/memory-note-warning.txt"; fi
 finished=true
+# An update ends here: the welcome and the setup messages are for a first install.
+if [ "${chosen_action:-}" = update ]; then printf '%s\n' "MINDY TimeSaver is now updated to version $version. Start a new session to use the new version."; exit 0; fi
 printf '%s\n' "MINDY TimeSaver is now $(folder_place)."
 if [ "${account_plugin:-false}" = true ]; then
  printf '%s\n' "Switch the mode at the bottom of the window back to Auto. Open Customize, then Plugins, then Discover, and add MINDY TimeSaver. The next step needs a new session: start one and type /install-mts to continue."
