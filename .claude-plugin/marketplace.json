@@ -6,12 +6,6 @@
   "description": "The public MINDY marketplace.",
   "plugins": [
     {
-      "name": "build-with-mindy-access",
-      "source": "./plugins/build-with-mindy-access",
-      "displayName": "Build With Mindy Setup",
-      "description": "Set up Build With Mindy with your access code."
-    },
-    {
       "name": "mindy-timesaver-access",
       "source": "./plugins/mindy-timesaver-access",
       "displayName": "MINDY TimeSaver Setup"
@@ -20,6 +14,12 @@
       "name": "timesaver",
       "source": "./plugins/timesaver",
       "displayName": "MINDY TimeSaver"
+    },
+    {
+      "name": "build-with-mindy-access",
+      "source": "./plugins/build-with-mindy-access",
+      "displayName": "Build With Mindy Setup",
+      "description": "Set up Build With Mindy with your access code."
     }
   ]
 }

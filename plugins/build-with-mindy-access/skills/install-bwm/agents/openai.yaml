@@ -1,0 +1,3 @@
+interface:
+  display_name: "Install BWM"
+  short_description: "Use /install-bwm with your access code."
