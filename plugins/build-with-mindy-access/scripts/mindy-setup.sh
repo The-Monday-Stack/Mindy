@@ -47,9 +47,9 @@ interrupted_message="Setup stopped because it was interrupted. $start_mindy_capi
 no_space_line="There's no space left on this computer, so free some up first."
 no_internet_line="This computer isn't connected to the internet right now."
 
-memory_first_message='Install MINDY TimeSaver first. Add MINDY TimeSaver Setup where you add plugins, and type /install-mts with your TimeSaver access code. When it has finished, type /install-bwm with your Build With Mindy code again.'
+memory_first_message='Install MINDY TimeSaver first. Add MINDY TimeSaver where you add plugins, and type /install-mts. When it has finished, type /install-bwm with your Build With Mindy code again.'
 chat_unreadable_message='We could not read your code from this chat. Start a new chat and type /install-bwm with your code there.'
-chat_reader_missing_message='MINDY TimeSaver needs repairing before we can read your code. Type /install-mts with your TimeSaver access code, then try /install-bwm again.'
+chat_reader_missing_message='MINDY TimeSaver needs repairing before we can read your code. Type /install-mts, then try /install-bwm again.'
 # A chosen update, repair or add-app step asks for the code alone: typing /install-bwm again would only
 # bring back the already-installed sentence and the choice.
 chosen_no_code_message='This needs your MINDY access code, which came in the message with your install steps. Type your code on its own and send it.'
