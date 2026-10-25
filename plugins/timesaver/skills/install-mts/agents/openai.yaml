@@ -1,0 +1,3 @@
+interface:
+  display_name: "Install MTS"
+  short_description: "Type /install-mts. Install steps: https://install.mindy.build"

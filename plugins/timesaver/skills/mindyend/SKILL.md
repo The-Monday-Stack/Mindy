@@ -2,7 +2,7 @@
 name: mindyend
 description: Use /mindyend to record what you asked, decided and did in this session to your MINDY TimeSaver (MTS).
 user-invocable: true
-version: 1.4.1
+version: 1.5.0
 ---
 
 Keep routine checks and successful writes silent. Never announce a skill name, markers, registration, settings checks or your working notes. Use a short ordinary tool description instead of the command text. Send each fixed question or confirmation once, verbatim, in its own message when specified. Do not paraphrase it or join it to the next question.
@@ -29,7 +29,7 @@ If a previously connected TimeSaver folder cannot be reached, say exactly: `MIND
 
 Before reviewing the conversation, read `.timesaver/privacy.json` through that connected folder. If it is missing or not a JSON object with a boolean `off`, say `MINDY TimeSaver couldn't read whether saving's switched on or off, so to be safe it hasn't saved anything. Type /timesaver-on to reset it, then try again.` and stop. If `off` is true, relay `I can't save this session because MINDY TimeSaver is switched off. Type /timesaver-on to switch it on, then type /mindyend to save this session.` and stop.
 
-Prepare the same six entry types and whole-session summary specified below. Use the app's conversation id if provided; otherwise generate a UUID once with Python's `uuid.uuid4()` and retain it in this conversation for retries. Choose a descriptive slug. Use the plugin's `scripts/timesaver-chat.py` on the cloud machine with one JSON object on standard input containing `marker`, `privacy`, `sessionId`, `slug`, `timestamp` (the current ISO instant), and `entries`. The helper needs Python's standard library, not the Mac engine or an access code. Keep the helper's returned path, content, count and summary for this save.
+Prepare the same six entry types and whole-session summary specified below. Use the app's conversation id if provided; otherwise generate a UUID once with Python's `uuid.uuid4()` and retain it in this conversation for retries. Choose a descriptive slug. Use the plugin's `scripts/timesaver-chat.py` on the cloud machine with one JSON object on standard input containing `marker`, `privacy`, `sessionId`, `slug`, `timestamp` (the current ISO instant), and `entries`. The helper needs Python's standard library, not the Mac engine. Keep the helper's returned path, content, count and summary for this save.
 
 Read that exact path through the connected-folder tools. If it already contains the same entry ids and hashes, confirm the already saved count without writing. If it contains another batch, leave it untouched, add the next unused number to the descriptive slug, and prepare the batch again. Never replace or append to an existing file. Re-read the saving setting immediately before writing. Write the returned content to the returned path through the connected-folder tools, creating the year folder if needed. Read the whole file back through those same tools and require every returned row and hash to match before confirming the count. A cloud file or download attachment is not a Mac save. Keep the same prepared payload on an interrupted retry. No capture journal is written outside the connected folder; session JSONL itself is the memory authority.
 
@@ -59,7 +59,7 @@ In Codex, use the MINDY TimeSaver writer below to capture the session. A Codex i
 
 ### Failure path
 
-Only for a real write failure with no `MTS_SAVE_REFUSED` marker in either Codex or Claude Code, keep the conversation and any attempted entries on this Mac. Run the following command once in Codex; in Claude Code replace `--harness codex` with `--harness claude-code`. Do not put writer output, file contents, or the person's words in the reason. Use `write not confirmed`, or `writer exit N` with the numeric exit status. The command reads the saved access code itself; never supply or show it. Do not ask the person to tell anyone.
+Only for a real write failure with no `MTS_SAVE_REFUSED` marker in either Codex or Claude Code, keep the conversation and any attempted entries on this Mac. Run the following command once in Codex; in Claude Code replace `--harness codex` with `--harness claude-code`. Do not put writer output, file contents, or the person's words in the reason. Use `write not confirmed`, or `writer exit N` with the numeric exit status. The command reads this Mac's install number itself; never supply it. Do not ask the person to tell anyone.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/bun-runtime.sh" bin/save-failure.ts --harness codex --reason "write not confirmed"
@@ -126,7 +126,7 @@ MTS_ENTRIES
 
 The writer appends the entries and their capture-batch journal inside the MINDY TimeSaver folder. Saving off, a damaged setting or an unidentified session saves nothing. Only the current saving setting decides, regardless of whether the session ran while saving was off. A successful exit alone is not a confirmed write: require a confirmed entry count and `MINDY TimeSaver memory usable: yes`. An identical retry reports the already stored count and adds nothing. Apply the refusal rule above whenever the writer returns `MTS_SAVE_REFUSED`.
 
-Your memory is kept on this computer. When you start a session and earlier days are ready to summarise, MINDY TimeSaver uses your AI to write daily to yearly summaries from those saved entries, which uses some of your AI usage. Switching saving off with /timesaver-off also stops this. When a save fails, a short report with your access code number but no conversation or memory content is sent to Team MINDY so it can be fixed, unless you have switched bug reports off with /timesaver-reports-off.
+Your memory is kept on this computer. When you start a session and earlier days are ready to summarise, MINDY TimeSaver uses your AI to write daily to yearly summaries from those saved entries, which uses some of your AI usage. Switching saving off with /timesaver-off also stops this. When a save fails, a short report with this Mac's install number but no conversation or memory content is sent to Team MINDY so it can be fixed, unless you have switched bug reports off with /timesaver-reports-off.
 
 Only if there is no `MTS_SAVE_REFUSED` marker and the writer reports a real write failure or its write is unconfirmed, keep the conversation and attempted entries in the local app transcript and follow the failure path above. In Codex, save the transcript with `codex-current-save` as specified above. Do not give a success confirmation.
 

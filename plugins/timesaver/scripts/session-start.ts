@@ -27,7 +27,7 @@ function start(name: string, entrypoint: string, logRoot: string, env: Record<st
 if (import.meta.main) {
 	const contentRoot = process.env.MTS_CONTENT_ROOT;
 	const stateRoot = process.env.MTS_STATE_ROOT;
-	if (!contentRoot || !stateRoot) throw new Error("MINDY TimeSaver couldn't find its own folders on this computer. Type /install-mts with your access code to put them back, then start a new session.");
+	if (!contentRoot || !stateRoot) throw new Error("MINDY TimeSaver couldn't find its own folders on this computer. Type /install-mts to put them back, then start a new session.");
 	const installedParts = join(contentRoot, "timesaver-install");
 	const { migratePersonTimeSaver } = await import(join(contentRoot, "MY-MIND/MY-SYSTEM/utilities/mts-person-update.ts"));
 	migratePersonTimeSaver(contentRoot, process.env.MTS_RUNTIME_SCRATCH_DIR ?? join(stateRoot, "runtime-scratch"));

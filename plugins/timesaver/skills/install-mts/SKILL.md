@@ -1,6 +1,6 @@
 ---
 name: install-mts
-description: Use /install-mts to set up MINDY TimeSaver with your access code.
+description: Use /install-mts to set up MINDY TimeSaver. For all installation steps, go to https://install.mindy.build.
 ---
 
 Keep routine checks and successful writes silent. Never announce a skill name, markers, registration, settings checks or your working notes. Use a short ordinary tool description instead of the command text. Send each fixed question or confirmation once, verbatim, in its own message when specified. Do not paraphrase it or join it to the next question.
@@ -33,42 +33,36 @@ If the person asks what MINDY TimeSaver can do, or chooses "show me what it can 
 
  Stop without starting setup.
 
-In the Claude app outside a Local Code session, do not run setup or ask for an access code. Say exactly: `Setup has to run on your own computer, and this chat runs somewhere else, so it can't happen here. Click the </> button, choose This computer, and type /install-mts with your access code there. When setup's finished, come back here, click + beside the message box, choose Add folder and pick the folder called timesaver in your home folder.` If their message contained an access code, add exactly: `Your access code is now in this chat. Keep it private, and use it in the new session on this computer.` Then stop. Never install the local engine onto the app's cloud machine.
+In the Claude app outside a Local Code session, do not run setup. Say exactly: `Setup has to run on your own computer, and this chat runs somewhere else, so it can't happen here. Click the </> button, choose This computer, and type /install-mts there. When setup's finished, come back here, click + beside the message box, choose Add folder and pick the folder called timesaver in your home folder.` Then stop. Never install the local engine onto the app's cloud machine.
 
-In Local Code in the Claude app, before continuing a pending setup, taking the already-installed route, or entering message 2 or message 3, check the host's available plugin/skill inventory. Require `mindyend`, `mindyload` and `mindysearch` from the full `timesaver` plugin to be available in this session (including their `timesaver:` namespaced forms). The setup plugin, an engine install record, cached files or the private runtime marketplace do not prove that the account plugin is installed and loaded. If the host inventory does not prove all three are available, say exactly: `Open Customize, then Plugins, then Discover, and add MINDY TimeSaver. The next step needs a new session: start one and type /install-mts to continue.` Then stop, without checking chat keeping, running the how-to, clearing setup progress or claiming setup is finished. Even a reply saying the plugin was added cannot replace this check or the new session. Do not invoke the three commands to check them, because mindyend would save the conversation.
+Follow these routes in order:
 
-Before asking for or using an access code, follow these routes in order:
+1. Obtain `<home>` from the host context if it supplies the absolute home path. Otherwise run one ordinary command inside the sandbox, which asks the person nothing: `printf '%s\n' "$HOME"`. This applies in every local host. Read `<home>/.timesaver/setup-progress.json` with the app's read-only file tools, or ordinary sandbox shell reads when those are the only file tools. A missing file means no pending setup. If its `stage` is `chat-keeping`, continue at message 2 below without running setup or message 1. Do not request outside-sandbox permission for these reads or ask the person for their home path.
+2. If the person types `/install-mts help`, run `"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh" --help`. Relay every line exactly and stop.
+3. Use the same read-only tools to check whether `<home>/.timesaver/install-state.json` is a file and `<home>/.timesaver/install-transaction.json` is absent, the same finished-install check setup uses. When both are true, follow **One install command** below to repair the current signed release, including the same Manual, permission and waiting rules and the Local Code account-plugin command. Relay every line exactly, including the already-installed line and its last line, `Would you like me to check for a MINDY TimeSaver update?`, and stop the turn. Only when the person answers yes, follow **Check for an update** below. Any other answer changes nothing, so say nothing more about updating.
+4. Otherwise, continue with the install below.
 
-1. If the person has not given a code, first obtain `<home>` from the host context if it supplies the absolute home path. Otherwise run one ordinary command inside the sandbox, which asks the person nothing: `printf '%s\n' "$HOME"`. This applies in Codex, the ChatGPT app and Terminal Claude Code, and in Local Code in the Claude app when the host has not supplied the path. Read `<home>/.timesaver/setup-progress.json` with the app's read-only file tools. In a host with only shell file tools, use ordinary sandbox commands to check and read the file; a shell read is allowed. A missing file means no pending setup. If its `stage` is `chat-keeping`, continue at message 2 below without running setup or message 1. These read-only checks must run in every local host. Do not request outside-sandbox permission for them or ask the person for their home path.
-2. If the person types `/install-mts help`, run `"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh" --help`. Relay every line exactly and stop. `help` is never an access code.
-3. Only when the person has not given a code, use the same read-only file tools (or ordinary sandbox shell reads in a host with only shell file tools) to check whether `<home>/.timesaver/install-state.json` is a file and `<home>/.timesaver/install-transaction.json` is absent, the same finished-install check setup uses. When both are true, run `"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh"` without a code. Relay every line exactly, including the already-installed line and its last line, `Would you like me to check for a MINDY TimeSaver update?`, and stop the turn. Do not run setup again, ask for a code or ask about chat keeping. Only when the person answers yes to that question, follow **Check for an update** below. Any other answer changes nothing, so say nothing more about updating. A supplied code always continues to the coded setup below, even when either file exists.
-4. Otherwise, if the person has not given a code, say exactly one of these and stop.
-
-`This needs your MINDY TimeSaver access code, which came in the message with your install steps. Type /install-mts, a space and your code, all on one line.`
-
-Only in Local Code in the Claude app, before the install command or any permission request, say exactly: `We're about to install MINDY TimeSaver on this computer, and Auto mode can stop an install part way. So switch the mode at the bottom of the window to Manual for now, and tell me when it shows Manual. Once it's installed, you can switch back to Auto.` This is the first setup message when a code is supplied. If the host does not already show Manual, stop this turn before running the command and wait until the person confirms Manual or the host shows it. The script reads the earlier message itself, so do not ask them to send the code again. A code supplied earlier for this pending install counts as supplied in the routes above. Do not give the mode instruction in Terminal Claude Code, the ChatGPT app, Codex or the chat side. After a successful install, stop for the person to switch back to Auto before continuing.
+Only in Local Code in the Claude app, before the install command or any permission request, say exactly: `We're about to install MINDY TimeSaver on this computer, and Auto mode can stop an install part way. So switch the mode at the bottom of the window to Manual for now, and tell me when it shows Manual. Once it's installed, you can switch back to Auto.` If the host does not already show Manual, stop this turn before running the command and wait until the person confirms Manual or the host shows it. Do not give the mode instruction in Terminal Claude Code, the ChatGPT app, Codex or the chat side. Continue setup in this session after the install.
 
 Expected absent setup files are ordinary results. Use file-tool existence checks, or a shell `if test -f "<exact file>"; then cat "<exact file>"; fi`. Never use `ls` on a group of optional files or a bare failing `test` as the tool call.
 
-### One install command, with no code in its text
+### One install command
 
-The script reads the person's own message from this chat's file on this computer, using `CLAUDE_CODE_SESSION_ID` (or `CLAUDE_SESSION_ID`) for Claude Code and Local Code, or `CODEX_THREAD_ID` (or `CODEX_SESSION_ID`) for the ChatGPT app and Codex. It honours `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. Never put the code in a command, standard input, a here-document, tool input, description, justification, progress line, reply or log. Never read the code out through a file tool. Never send it with `write_stdin`.
+Setup needs no input from the chat. It never reads the chat file.
 
 For Terminal Claude Code, the ChatGPT app and Codex, use this single command:
 
 ```sh
-"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh" --code-from-chat
+"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh"
 ```
 
 For Local Code in the Claude app, use this single command instead:
 
 ```sh
-"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh" --code-from-chat --account-plugin
+"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh" --account-plugin
 ```
 
-If the host has not supplied its current session id, identify the current chat's file the same way /mindysave does. Use the host's current session metadata, never the newest file or another chat. Append `--transcript "<current-chat-file>"` and either `--claude-session "<current-session-id>"` or `--codex-thread "<current-thread-id>"` to the same command. Both the absolute file path and its id must come from this host's current chat metadata. Never read the message contents with a tool to find them. In Codex that file's first `session_meta.payload.id` must match the current thread id. If it cannot be identified, relay this sentence and stop: `We couldn't read this chat on this computer, so setup hasn't started. Start a new chat on this computer and type /install-mts with your code there.` This is different from the no-code sentence: asking for the code again in an unreadable chat cannot help. A readable chat without a code returns the no-code sentence above. Relay either refusal exactly, with no guesses about the code and no setup-success sentence.
-
-Use these exact tool words, without adding the code or naming it:
+Use these exact tool words:
 
 - Permission title and justification: `Install MINDY TimeSaver on this computer`
 - Tool description and running line: `Installing MINDY TimeSaver on this computer`
@@ -82,11 +76,11 @@ If the app asks before running, say exactly: `Setup needs to reach the internet 
 
 In Claude Code, run that one command outside the sandbox (`dangerouslyDisableSandbox: true`). In the ChatGPT app and Codex, if `request_permissions` is offered and access is restricted, call the `request_permissions` tool once, with `{"network": {"enabled": true}, "file_system": {"write": ["<home>/timesaver", "<home>/.timesaver", "<home>/.codex", "<home>/Library/Application Support/MINDY"]}}`. Replace the saves-folder entry with its recorded location and include its parent and redirect parents only when they are not the home folder itself. For a parent equal to home, request the exact saves folder and exact redirect file instead, and add `<home>/.claude` when Claude Code is installed. Run the command in the same turn with no `sandbox_permissions` after that grant. If that tool is unavailable, run the single command with `sandbox_permissions: "require_escalated"` and the exact justification above. Never run inside the sandbox first as a trial. With full access or never-ask mode, request nothing and run normally.
 
-Setup reads no input. Run it without a terminal (`tty: false`). In the ChatGPT app and Codex, give that first call `yield_time_ms: 30000`, the longest first wait the command tool accepts: the call returns as soon as setup exits. If it returns a running session, wait for it with `write_stdin` with `chars: ""` and `yield_time_ms: 300000`, the longest wait the tool accepts for an empty poll, without requesting escalation again, and repeat that empty wait until setup exits. An empty wait sends nothing, so the person sees one ask and no more. Never send characters to it and never send the code while waiting. A wait is observation of the same granted command, not another install. Setup never stops for taking long: it stops a server transfer or an app command only after 2 minutes with no progress, and says so. A failure stops the three messages below. If setup says the code is not for MINDY TimeSaver, relay its sentence exactly. Never print any part of the code or guess that it is a test code, incomplete or changed. Do not claim setup has finished while its command is still running.
+Setup reads no input. Run it without a terminal (`tty: false`). In the ChatGPT app and Codex, give that first call `yield_time_ms: 30000`, the longest first wait the command tool accepts: the call returns as soon as setup exits. If it returns a running session, wait for it with `write_stdin` with `chars: ""` and `yield_time_ms: 300000`, the longest wait the tool accepts for an empty poll, without requesting escalation again, and repeat that empty wait until setup exits. An empty wait sends nothing, so the person sees one ask and no more. Never send characters to it while waiting. A wait is observation of the same granted command, not another install. Setup never stops for taking long: it stops a server transfer or an app command only after 2 minutes with no progress, and says so. A failure stops the three messages below. Do not claim setup has finished while its command is still running.
 
 ### Check for an update
 
-This step runs only after the person has answered yes to the update question from the already-installed route above. Never start it because of a supplied code, the start of a session or your own idea. It uses the access code MINDY TimeSaver saved on this computer when it was installed, so never ask for the code, read the code file or look in the chat for a code.
+This step runs only after the person has answered yes to the update question from the already-installed route above. Never start it at the start of a session or on your own initiative. It needs no saved credential.
 
 In Local Code in the Claude app, give the same Manual sentence as before an install first, and wait for Manual in the same way. Then follow the same home-folder, access, permission, sandbox and waiting rules as the install command above, with this single command in place of it.
 
@@ -108,7 +102,7 @@ Use these exact tool words for this step:
 - Tool description and running line: `Checking for a MINDY TimeSaver update`
 - Finished line, only after exit status zero: `Checked for a MINDY TimeSaver update.`
 
-Relay every line it prints exactly, then stop. It says which version is now installed, that this computer already has the latest version, or that the code is not saved on this computer and what to type instead; a stop says why, as an install's stop does. Do not show the welcome, the image, the how-to or the three setup messages after it, and do not ask about chat keeping. In Local Code in the Claude app, the person can switch back to Auto afterwards, as after an install.
+Relay every line it prints exactly, then stop. It says which version is now installed, that this computer already has the latest version; a stop says why, as an install's stop does. Do not show the welcome, the image, the how-to or the three setup messages after it, and do not ask about chat keeping. In Local Code in the Claude app, the person can switch back to Auto afterwards, as after an install.
 
 ## Setup in three messages
 
@@ -118,22 +112,23 @@ Name no app the person is not in. Use "your chats", "the app" and "your AI" in r
 
 Only in the successful install response, place `![MINDY](<${CLAUDE_PLUGIN_ROOT}/assets/mindy-message-icon.png>)` beside the finished line and the welcome relayed below, once in that message. Resolve `${CLAUDE_PLUGIN_ROOT}` to this plugin's absolute folder supplied by the host, or move up two directories from the folder containing this skill file. Use the host's image-viewing tool to display those image bytes inline at this moment. In a connected-folder chat, use its image tool, never a cloud shell file path. Do not print that local Markdown image expression, a text link, the word MINDY as a substitute, or the file path. If the host cannot display image bytes, continue without a picture. A text-only Terminal cannot display this PNG as an inline image; never print its path.
 
-Relay every person-facing line from a successful install exactly. Hide the `MTS_HOST_UI` marker. Never print the code back. Append only the ending for the current app below, then stop the turn. Do not inspect chat keeping or show the how-to until the person replies to message 1.
+Relay every person-facing line from a successful install exactly. Hide the `MTS_HOST_UI` marker. For the ChatGPT app and Codex, append the matching permission sentence below, then stop the turn until the person confirms it. In Claude Code in the Terminal and Local Code in the Claude app, continue straight to message 2 in this session after the welcome. Do not change chat keeping until the person answers its question.
 
 - ChatGPT app, only when `MTS_HOST_UI=chatgpt-app`: `MINDY TimeSaver needs your okay to work in the background while you chat. Click the anchor icon at the bottom of the chat, then Allow all. Let me know when you've done that.`
 - Codex outside the ChatGPT app, only when `MTS_HOST_UI=codex-app`: `MINDY TimeSaver needs your okay to work in the background while you chat. Open Plugins and choose MINDY TimeSaver, then scroll down to Hooks and click Trust all. Let me know when you've done that.`
-- Claude Code in the Terminal: `Ready to choose how long to keep your chats?`
-- Local Code in the Claude app: the script already prints the next step above. Append nothing. Do not suggest a reply in this session, continue chat keeping here or say the commands are ready.
+- Claude Code in the Terminal and Local Code in the Claude app: append nothing and continue to message 2 in this session.
 
-The chat-side route above ends before the three setup messages. Account plugins sync at the next session start. Chat ignores hooks. The Code side runs locally only when Local is selected. Sources: https://claude.com/docs/plugins/platform-support.md and https://code.claude.com/docs/en/desktop-quickstart.
+The chat-side route above ends before the three setup messages. This plugin already supplies the install and memory commands in this session. Chat ignores hooks. The Code side runs locally only when Local is selected. Sources: https://claude.com/docs/plugins/platform-support.md and https://code.claude.com/docs/en/desktop-quickstart.
 
 ### Message 2: chat keeping
 
-After the person confirms message 1, follow the chat-keeping section below for this app only. If they need to choose, ask and stop the turn until they answer. If there is nothing to change, settings cannot be changed or an organisation controls them, continue straight to message 3 in this turn. Do not ask an extra readiness question.
+After the welcome, and after any app permission confirmation required in message 1, follow the chat-keeping section below for this app only in the same session. If they need to choose, ask and stop the turn until they answer. If there is nothing to change, settings cannot be changed or an organisation controls them, continue straight to message 3 in this turn. Do not ask an extra readiness question.
 
 ### Message 3: short how-to
 
 After the person's answer to message 2, apply their chat-keeping choice if needed, then always finish with the short how-to, even when they leave the setting alone or it cannot be changed. First run `"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh" --folder-info` and relay its folder message. In the Claude app, also say `In any NEW chat, click + beside the message box, choose Add folder, and pick the folder called timesaver in your home folder.` If the folder message gives a different location, instead say `In any NEW chat, click + beside the message box, choose Add folder, and pick your saves folder <folder-place>.`, using its plain place from that message. Never print a full path. The saves-folder message names Claude and ChatGPT by Mike's decision. Relay those names too. Then run `"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh" --help` and relay every line exactly. This is also the how-to for `/mindyhelp`. Then run `"${CLAUDE_PLUGIN_ROOT}/scripts/timesaver-setup.sh" --setup-complete`. Only when `/my101` is available in the host's skill list, add: `To see your other MINDY skills, type /my.`
+
+Only in Local Code in the Claude app, after applying the chat-keeping choice, say exactly: `Switch the mode at the bottom of the window back to Auto.` Do not say this in Terminal Claude Code, the ChatGPT app or Codex.
 
 <!-- MIKE'S WEBSITE AND OFFERS: BEGIN -->
 

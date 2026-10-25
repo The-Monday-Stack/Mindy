@@ -3,117 +3,14 @@ set -eu
 
 start='type /install-mts'
 capital="$(printf '%s' "$start" | cut -c 1 | tr '[:lower:]' '[:upper:]')$(printf '%s' "$start" | cut -c 2-)"
-no_code="This needs your MINDY TimeSaver access code, which came in the message with your install steps. $capital, a space and your code, all on one line."
-chat_unreadable="We couldn't read this chat on this computer, so setup hasn't started. Start a new chat on this computer and type /install-mts with your code there."
-not_issued="This isn't a MINDY TimeSaver access code. It may be the code for your other MINDY product, which is different. Nothing was installed. Type /install-mts with your MINDY TimeSaver access code instead."
-not_active="This access code has been switched off, so it can't install MINDY TimeSaver any more. You've typed it right - it's the code itself that isn't active. If you've got a newer code, type /install-mts with that one, and if not, just reply to the email your code came in."
-different="This computer already has a different MINDY TimeSaver access code saved, and MINDY TimeSaver uses one code per computer. $capital with that earlier code."
-unsigned="This isn't a signed MINDY TimeSaver release, so setup stopped before installing anything, to keep this computer safe. Check you're on your usual internet connection, then type /install-mts with your access code again."
-too_many="Too many tries from this internet connection in the last minute, so MINDY TimeSaver's install server is pausing for a moment. Wait a minute, then $start with your access code again."
-unreachable="Setup could not reach MINDY TimeSaver's install server. Check you are online, then $start with your access code again."
-stalled_transfer="The connection to MINDY TimeSaver's install server made no progress for 2 minutes, so setup stopped. Nothing has been installed. Check you are online, then $start with your access code again."
-app_stalled="Your app made no progress adding MINDY TimeSaver for 2 minutes, so setup stopped it and undid this setup's changes. Check you are online, then $start with your access code again."
-interrupted="Setup stopped because it was interrupted. $capital with your access code to start again."
-generic="It's safe to run setup again, so type /install-mts with your access code to have another go."
+unsigned="This isn't a signed MINDY TimeSaver release, so setup stopped before installing anything, to keep this computer safe. Check you're on your usual internet connection, then type /install-mts again."
+too_many="Too many tries from this internet connection in the last minute, so MINDY TimeSaver's install server is pausing for a moment. Wait a minute, then $start again."
+unreachable="Setup could not reach MINDY TimeSaver's install server. Check you are online, then $start again."
+stalled_transfer="The connection to MINDY TimeSaver's install server made no progress for 2 minutes, so setup stopped. Nothing has been installed. Check you are online, then $start again."
+app_stalled="Your app made no progress adding MINDY TimeSaver for 2 minutes, so setup stopped it and undid this setup's changes. Check you are online, then $start again."
+interrupted="Setup stopped because it was interrupted. $capital to start again."
+generic="It's safe to run setup again, so type /install-mts to have another go."
 update_offer="Would you like me to check for a MINDY TimeSaver update?"
-saved_code_missing="MINDY TimeSaver couldn't find your access code saved on this computer, so it can't check for an update. $capital, a space and your code, all on one line, and setup will update MINDY TimeSaver with it."
-
-# JXA is supplied by macOS, including before our Bun runtime is installed.
-# Only the identified chat is opened. Its contents never enter command arguments.
-# It runs only as setup's recorded background reader: it becomes that step's
-# holder, so a stop reaches the reader (see Steps and the chat read below).
-read_chat_code() {
- step_exec / /usr/bin/osascript -l JavaScript - "$chat_file" "$chat_harness" "$chat_id" <<'MTS_READ_CURRENT_CHAT'
-ObjC.import('Foundation');
-function run(arguments) {
- const manager = $.NSFileManager.defaultManager;
- const environment = $.NSProcessInfo.processInfo.environment;
- const get = key => { const value = environment.objectForKey(key); return value.isNil() ? '' : ObjC.unwrap(value); };
- const children = directory => {
-  const value = manager.contentsOfDirectoryAtPathError(directory, null);
-  return value.isNil() ? [] : ObjC.deepUnwrap(value).map(name => directory + '/' + name);
- };
- const read = file => {
-  const value = $.NSString.stringWithContentsOfFileEncodingError(file, $.NSUTF8StringEncoding, null);
-  if (value.isNil()) throw Error('chat unavailable');
-  return ObjC.unwrap(value);
- };
- const claude = arguments[1] === 'claude' ? arguments[2] : arguments[1] === 'codex' ? '' : get('CLAUDE_CODE_SESSION_ID') || get('CLAUDE_SESSION_ID');
- const codex = arguments[1] === 'codex' ? arguments[2] : claude ? '' : get('CODEX_THREAD_ID') || get('CODEX_SESSION_ID');
- if (!/^[a-zA-Z0-9_-]+$/.test(claude || codex)) throw Error('current chat not identified');
- let candidates = [];
- if (arguments[0]) candidates.push(arguments[0]);
- else if (claude && /^[a-zA-Z0-9_-]+$/.test(claude)) {
-  for (const directory of children((get('CLAUDE_CONFIG_DIR') || get('HOME') + '/.claude') + '/projects')) {
-   const file = directory + '/' + claude + '.jsonl';
-   if (manager.fileExistsAtPath(file)) candidates.push(file);
-  }
- } else if (codex && /^[a-zA-Z0-9_-]+$/.test(codex)) {
-  const base = get('CODEX_HOME') || get('HOME') + '/.codex';
-  for (const storage of ['sessions', 'archived_sessions']) {
-   const iterator = manager.enumeratorAtPath(base + '/' + storage);
-   if (iterator.isNil()) continue;
-   let entry;
-   while (!(entry = iterator.nextObject).isNil()) {
-    const relative = ObjC.unwrap(entry);
-    if (relative.split('/').pop().startsWith('rollout-') && relative.endsWith('-' + codex + '.jsonl')) candidates.push(base + '/' + storage + '/' + relative);
-   }
-  }
- } else throw Error('current chat not identified');
- if (candidates.length !== 1 || candidates[0][0] !== '/') throw Error('current chat not unique');
- const file = candidates[0];
- const attributes = manager.attributesOfItemAtPathError(file, null);
- if (attributes.isNil() || ObjC.unwrap(attributes.objectForKey($.NSFileType)) !== 'NSFileTypeRegular') throw Error('chat unavailable');
- const textOf = content => typeof content === 'string' ? content : Array.isArray(content)
-  ? content.filter(item => item && ['text', 'input_text'].includes(item.type) && typeof item.text === 'string').map(item => item.text).join('\n') : '';
- // Only a whole message that is this host's own install invocation can supply
- // the code. Claude Code records a typed /install-mts as its command tags and
- // nothing else; Codex and the ChatGPT app record the typed words themselves.
- // An invocation inside pasted, quoted or logged text, or in the other host's
- // form, is never one, so it can never supply or replace a code.
- const name = '(?:[a-zA-Z0-9_-]+:)?install-mts';
- const invocation = claude
-  ? new RegExp('^(?:<command-message>[^<]*</command-message>\\s*)?<command-name>/' + name + '</command-name>\\s*(?:<command-message>[^<]*</command-message>\\s*)?<command-args>([^<]*)</command-args>$')
-  : new RegExp('^(?:[/$]' + name + '|\\[\\$?' + name + '\\]\\([^\\n()]*/install-mts/SKILL\\.md\\))(?:\\s+([^]*))?$');
- // The invocation's argument must be the code alone: the issued Ed25519
- // signature is 86 base64url characters, and one full stop may end it.
- const alone = /^([`'"]?)([a-zA-Z0-9-]{3,32}\.[a-zA-Z0-9_-]{86})\1\.?$/;
- // An appending writer may not have finished its last row yet. Wait for it
- // even when an earlier code is already there: it may be the newer code.
- let lines;
- for (let attempt = 0; ; attempt++) {
-  lines = read(file).split('\n');
-  const last = lines[lines.length - 1];
-  let unfinished = false;
-  if (last.trim()) { try { JSON.parse(last); } catch (_) { unfinished = true; } }
-  if (!unfinished) break;
-  if (attempt === 9) throw Error('chat still being written');
-  $.NSThread.sleepForTimeInterval(0.2);
- }
-  const rows = lines.filter(line => line.trim()).map(line => {
-   const row = JSON.parse(line);
-   if (!row || typeof row !== 'object' || Array.isArray(row)) throw Error('invalid chat');
-   return row;
-  });
-  const firstMeta = rows.find(row => row.type === 'session_meta');
-  if (codex && (!firstMeta || !firstMeta.payload || firstMeta.payload.id !== codex)) throw Error('wrong thread');
-  if (claude && !rows.some(row => row.sessionId === claude && row.message)) throw Error('wrong session');
-  let code = '';
-  for (const row of rows) {
-   let message;
-   if (codex && row.type === 'response_item') message = row.payload && row.payload.type === 'message' ? row.payload : null;
-   else if (!codex && row.type === 'user' && !row.isMeta && (!claude || row.sessionId === claude)) message = row.message;
-   if (!message || message.role !== 'user') continue;
-   const install = textOf(message.content).trim().match(invocation);
-   if (!install) continue;
-   // The newest install invocation decides: without a code alone, it has none.
-   const given = (install[1] || '').trim().match(alone);
-   code = given ? given[2] : '';
-  }
-  return code;
-}
-MTS_READ_CURRENT_CHAT
-}
 
 host_ui() {
  origin=$(printf '%s' "${CODEX_INTERNAL_ORIGINATOR_OVERRIDE:-}" | tr '[:upper:]' '[:lower:]')
@@ -214,45 +111,26 @@ if [ "${1:-}" = "--folder-info" ]; then
  printf '%s\n' "Your saves are $(folder_place). MINDY TimeSaver works with Claude or ChatGPT, with other AIs coming soon. They all read the same memories and build the same context, so you are not locked in to one company. This folder is yours, not any company's. You can move it anywhere, at any time, by asking me."
  exit 0
 fi
-# A variable this computer already exported stays exported when setup gives it
-# a value, so every program setup starts would see it. Each variable that holds
-# the access code, or the name of a file or pipe the code passes through, is
-# unset before setup gives it a value.
+# Do not let variables left by a retired installer reach child programs.
 unset code chat_code_copy chat_pipe
-code=
 account_plugin=false
-from_chat=false
 chosen_action=
-chat_file=
-chat_harness=
-chat_id=
-for argument in "$@"; do
- case "$argument" in --account-plugin) account_plugin=true ;; --code-from-chat) from_chat=true ;; esac
-done
 while [ "$#" -gt 0 ]; do
  case "$1" in
-  --code-from-chat|--account-plugin) shift ;;
-  # The update the person chose after the already-installed offer. It uses the
-  # code saved on this computer, never a chat.
+  --account-plugin) account_plugin=true; shift ;;
   --chosen-action)
    shift; chosen_action=${1:-}
-   [ "$chosen_action" = update ] && [ "$from_chat" = false ] || { printf '%s\n' 'Setup reads your code from this chat. Use /install-mts with your code in the message box to start.'; exit 1; }
+   [ "$chosen_action" = update ] || { printf '%s\n' 'Type /install-mts to set up MINDY TimeSaver.'; exit 1; }
    shift ;;
-  --claude-session|--codex-thread)
-   case "$1" in --claude-session) chat_harness=claude ;; --codex-thread) chat_harness=codex ;; esac
-   shift; chat_id=${1:-}; [ -n "$chat_id" ] || { printf '%s\n' "$chat_unreadable"; exit 1; }; shift ;;
-  --transcript) shift; chat_file=${1:-}; [ -n "$chat_file" ] || { printf '%s\n' "$chat_unreadable"; exit 1; }; shift ;;
-  *) printf '%s\n' 'Setup reads your code from this chat. Use /install-mts with your code in the message box to start.'; exit 1 ;;
+  *) printf '%s\n' 'Type /install-mts to set up MINDY TimeSaver.'; exit 1 ;;
  esac
 done
 
 tmp=
-chat_code_copy=
-chat_code_copy_ready=
 finished=false
 pending_report=
 step='starting MINDY TimeSaver setup'
-cleanup() { if [ "${1:-0}" != 0 ] && [ -n "$chat_code_copy" ] && [ -f "$chat_code_copy_ready" ]; then rm -f "$chat_code_copy"; fi; [ -z "$tmp" ] || rm -rf "$tmp"; }
+cleanup() { [ -z "$tmp" ] || rm -rf "$tmp"; }
 # A stop can arrive while a function's output goes to a temporary file, so the
 # stop sentence uses the chat's own output, kept on descriptor 8.
 exec 8>&1
@@ -260,7 +138,7 @@ exec 8>&1
 # server goes only after the person has their reply (see send_report).
 on_signal() { trap '' HUP INT TERM; finished=true; reason="Setup stopped while $step. $interrupted"; report_stop "$reason" || :; stop_steps; cleanup 1; printf '%s\n' "$reason" >&8; send_report; exit 1; }
 on_exit() { status=$?; stop_steps; if [ "$status" != 0 ] && [ "$finished" = false ]; then report_stop "Setup stopped while $step. $generic" || :; fi; cleanup "$status"; if [ "$status" != 0 ] && [ "$finished" = false ]; then printf '%s\n' "Setup stopped while $step. $generic" >&8; send_report; fi; }
-# Interruption is handled from here on, including while this chat is read.
+# Interruption is handled from here on.
 trap on_signal HUP INT TERM
 
 # Runs one step of setup's own (a program that starts nothing) in setup's
@@ -544,36 +422,24 @@ owner_runner='
  }, lookMs);
  child.on("exit", status => process.exit(status ?? 1));
 '
-# Usage: run_owned <folder> <watch|hold> <none|line|raw> <command...>. line and
-# raw give the command the access code on its input (with or without a newline),
-# never in its arguments.
+# Usage: run_owned <folder> <watch|hold> <command...>.
 run_owned() {
- owned_directory=$1; owned_mode=$2; owned_input=$3; shift 3
+ owned_directory=$1; owned_mode=$2; shift 2
  rm -f "$tmp/app-stalled"
  step_open main || return 1
- case "$owned_input" in
-  line) printf '%s\n' "$code" | step_exec "$tmp" "$bun" -e "$owner_runner" "$owned_directory" "$tmp/app-stalled" "$owned_mode" "$@" & ;;
-  raw) printf '%s' "$code" | step_exec "$tmp" "$bun" -e "$owner_runner" "$owned_directory" "$tmp/app-stalled" "$owned_mode" "$@" & ;;
-  *) step_exec "$tmp" "$bun" -e "$owner_runner" "$owned_directory" "$tmp/app-stalled" "$owned_mode" "$@" & ;;
- esac
+ step_exec "$tmp" "$bun" -e "$owner_runner" "$owned_directory" "$tmp/app-stalled" "$owned_mode" "$@" &
  step_started main
  step_wait main; owned_status=$step_status
  step_end main
  return "$owned_status"
 }
 # An app's plugin command, watched for progress.
-run_app_in() { app_directory=$1; shift; run_owned "$app_directory" watch none "$@"; }
+run_app_in() { app_directory=$1; shift; run_owned "$app_directory" watch "$@"; }
 run_app() { run_app_in "$tmp" "$@"; }
 # A step of setup's own that may start processes of its own.
-run_step() { run_owned "$tmp" hold none "$@"; }
+run_step() { run_owned "$tmp" hold "$@"; }
 
-# The access code is handed only to macOS's own curl, named in full, so no
-# other program found by name can receive it.
-gate_curl() {
-	/usr/bin/curl -H @/dev/fd/3 "$@" 3<<GATE_AUTHORIZATION
-Authorization: Bearer $code
-GATE_AUTHORIZATION
-}
+gate_curl() { /usr/bin/curl "$@"; }
 
 # A server transfer is never stopped for taking long. It is stopped only when
 # not one byte has arrived for 2 minutes, which covers a connection that never
@@ -598,9 +464,7 @@ gate_transfer() {
  # --no-buffer: curl otherwise holds received bytes in its write buffer until
  # it is full or the transfer ends (curl 8.7.1, as macOS ships it), so a slow
  # transfer could look as if no byte had arrived.
- (step_exec "$tmp" /usr/bin/curl --no-buffer -H @/dev/fd/3 -o "$transfer_output" "$@") 3<<GATE_AUTHORIZATION >"$tmp/transfer-status" 2>/dev/null &
-Authorization: Bearer $code
-GATE_AUTHORIZATION
+ step_exec "$tmp" /usr/bin/curl --no-buffer -o "$transfer_output" "$@" >"$tmp/transfer-status" 2>/dev/null &
  step_started main
  if step_group "$main_files"; then
   step_open watch || return 1
@@ -616,9 +480,38 @@ GATE_AUTHORIZATION
  return "$transfer_status"
 }
 
+ensure_install_number() {
+ install_number_file="$home/.timesaver/install-number"
+ [ ! -L "$home/.timesaver" ] || return 1
+ mkdir -p "$home/.timesaver" || return 1
+ if [ -e "$install_number_file" ] || [ -L "$install_number_file" ]; then
+  [ -f "$install_number_file" ] && [ ! -L "$install_number_file" ] && [ -O "$install_number_file" ] || return 1
+  number_bytes=$(wc -c <"$install_number_file" | tr -d ' ')
+  install_number=$(cat "$install_number_file")
+  case "$install_number" in *[!0-9a-f]*) return 1 ;; esac
+  if [ "$number_bytes" = 32 ] && [ "${#install_number}" = 32 ]; then return 0; fi
+  [ "$number_bytes" -lt 32 ] && [ "$number_bytes" = "${#install_number}" ] || return 1
+  # A prefix from an older interrupted write was never a complete identity.
+  # Defer its repair to the verified release, so even an older installed helper
+  # cannot refuse this retry before recovery. Stop reports stay silent meanwhile.
+  return 2
+ else
+  fresh_number=$(/usr/bin/openssl rand -hex 16) || return 1
+  number_temporary=$(/usr/bin/mktemp "$home/.timesaver/.install-number.XXXXXX") || return 1
+  printf '%s' "$fresh_number" >"$number_temporary"
+  ln "$number_temporary" "$install_number_file" 2>/dev/null || :
+  rm -f "$number_temporary"
+ fi
+ [ -f "$install_number_file" ] && [ ! -L "$install_number_file" ] && [ -O "$install_number_file" ] || return 1
+ [ "$(wc -c <"$install_number_file" | tr -d ' ')" = 32 ] || return 1
+ install_number=$(cat "$install_number_file")
+ case "$install_number" in *[!0-9a-f]*|'') return 1 ;; esac
+ [ "${#install_number}" = 32 ]
+}
+
 json_text() { printf '%s' "$1" | LC_ALL=C tr -d '\000-\010\013-\037\177' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e "s/$(printf '\t')/\\\\t/g"; }
 report_stop() {
-	[ -n "${home:-}" ] && [ -n "$code" ] || return 0
+	[ -n "${home:-}" ] || return 0
 	stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf 'unknown-time')
 	report_id="$(printf '%s' "$stamp" | tr ':' '-')-$$"
 	stop_root="$home/.timesaver/setup-stops"
@@ -628,10 +521,11 @@ report_stop() {
 		printf 'MINDY TimeSaver setup stop\nTime (UTC): %s\nStep: %s\nReason: %s\n' "$stamp" "$step" "$1" >"$note" 2>/dev/null || :
 		chmod 600 "$note" 2>/dev/null || :
 	fi
-	access_number=${code%.*}
-	case "$access_number" in ''|*[!A-Za-z0-9-]*) return 0 ;; esac
-	[ "$access_number" != "$code" ] || return 0
-	report=$(printf '{"report":"mts-setup-stop/v1","product":"mts","reportId":"%s","membershipNumber":"%s","step":"%s","reason":"%s","stoppedAt":"%s"}' "$(json_text "$report_id")" "$(json_text "$access_number")" "$(json_text "$step")" "$(json_text "$1")" "$(json_text "$stamp")")
+	ensure_install_number || return 0
+	app='not known'
+	if [ -n "${CLAUDECODE:-}${CLAUDE_CODE_SESSION_ID:-}" ]; then app='Claude Code'
+	elif [ -n "${CODEX_THREAD_ID:-}${CODEX_SESSION_ID:-}${CODEX_CLI_PATH:-}" ]; then app=Codex; fi
+	report=$(printf '{"report":"mts-setup-stop/v1","reportId":"%s","installNumber":"%s","step":"%s","reason":"%s","stopNote":"","app":"%s","mindyVersion":"%s","macosVersion":"%s","stoppedAt":"%s"}' "$(json_text "$report_id")" "$install_number" "$(json_text "$step")" "$(json_text "$1")" "$app" "$(json_text "${installed_version:-}")" "$(json_text "$(/usr/bin/sw_vers -productVersion 2>/dev/null || :)")" "$(json_text "$stamp")")
 	pending_report=$report
 	return 0
 }
@@ -647,67 +541,14 @@ fail_as() { finished=true; reason="Setup stopped while $step. $1"; report_stop "
 # 28 means not one byte arrived for 2 minutes (see gate_transfer).
 fail_transfer() { if [ "$1" = 28 ]; then fail_as "$stalled_transfer"; fi; fail_as "$unreachable"; }
 
-if [ "$from_chat" = true ]; then
- [ "$(uname -s)" = Darwin ] || { printf '%s\n' 'Setup needs to run on this computer. Click the </> button, choose This computer and run /install-mts there.'; exit 1; }
- step='reading your code from this chat'
- # The reader runs in the background as a recorded step (see Steps), so a stop
- # ends it and waits for it before the interruption sentence, however long its
- # read takes. Its answer comes back through a pipe that has no name on disk,
- # never a file. Setup's temporary folder holds the step's own pipes.
- tmp=$(mktemp -d) || { printf '%s\n' "$chat_unreadable"; exit 1; }
- trap cleanup EXIT
- chat_pipe=$(mktemp -d) || { printf '%s\n' "$chat_unreadable"; exit 1; }
- if mkfifo -m 600 "$chat_pipe/code"; then exec 9<>"$chat_pipe/code"; else rm -rf "$chat_pipe"; printf '%s\n' "$chat_unreadable"; exit 1; fi
- rm -rf "$chat_pipe"
- step_open main || { printf '%s\n' "$chat_unreadable"; exit 1; }
- read_chat_code >&9 2>/dev/null &
- step_started main
- step_wait main; reader_status=$step_status
- step_end main
- # One more line after the reader's answer, so this read never waits.
- printf '\n' >&9
- IFS= read -r code <&9 || code=
- exec 9>&-
- if [ "$reader_status" != 0 ]; then code=; printf '%s\n' "$chat_unreadable"; exit 1; fi
- if [ -z "$code" ]; then printf '%s\n' "$no_code"; exit 1; fi
- step='starting MINDY TimeSaver setup'
-fi
 installed_version=
-if [ "$chosen_action" = update ]; then
- # Only a finished install is updated. An unfinished one still needs its code typed.
- if [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then
+if [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then
   installed_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.timesaver/install-state.json" | head -n 1)
-  # The code saved at install (see access-code-file.ts) is read here, at the
-  # moment of use, by the shell itself: it never enters a command's arguments,
-  # a file or the output. The checks match that file's own reader: a private
-  # plain file of this account, in folders that are not links.
-  saved_code_file="$HOME/.timesaver/access-code/timesaver-access-code"
-  if [ ! -L "$HOME/.timesaver" ] && [ ! -L "$HOME/.timesaver/access-code" ] && [ -f "$saved_code_file" ] && [ ! -L "$saved_code_file" ] && [ -O "$saved_code_file" ] && [ -r "$saved_code_file" ]; then
-   IFS= read -r code <"$saved_code_file" || :
-  fi
-  # A saved code has the issued shape: 3 to 32 letters, digits or hyphens, a
-  # dot, and the 86-character signature.
-  saved_number=${code%%.*}; saved_signature=${code#*.}
-  case "$code" in ''|*[!A-Za-z0-9._-]*) code= ;; esac
-  case "$saved_number" in ''|*[!A-Za-z0-9-]*) code= ;; esac
-  case "$saved_signature" in *.*) code= ;; esac
-  if [ "${#saved_number}" -lt 3 ] || [ "${#saved_number}" -gt 32 ] || [ "${#saved_signature}" -ne 86 ]; then code=; fi
-  saved_number=; saved_signature=
-  if [ -z "$code" ]; then printf '%s\n' "$saved_code_missing"; exit 1; fi
- else
-  printf '%s\n' "$no_code"; exit 1
  fi
-fi
-# An unfinished setup retains its transaction until app registration succeeds.
-if [ -z "$code" ] && [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then
- read_content_root
- printf '%s\n' "MINDY TimeSaver is already installed $(folder_place)."
- show_help
- # The update runs only when the person says yes (see the install-mts skill).
- printf '\n%s\n' "$update_offer"
- exit 0
-fi
-if [ -z "$code" ]; then printf '%s\n' "$no_code"; exit 0; fi
+# The ordinary command repairs the signed current release, including a missing
+# managed file or a deferred memory registration. Keep the existing help reply.
+repairing=false
+if [ "$chosen_action" != update ] && [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then repairing=true; fi
 trap on_exit EXIT
 
 [ -n "$tmp" ] || tmp=$(mktemp -d) || fail_as "$generic"
@@ -722,13 +563,14 @@ if [ -x "$home/.timesaver/bin/bun" ] && [ ! -f "$home/.timesaver/install-transac
  [ -d "$content_root" ] || fail_as "MINDY TimeSaver cannot reach your saves folder $(folder_place). Reconnect its disk or cloud folder, then try again. Your existing saves have not been changed."
 fi
 state_root="$home/.timesaver"
+ensure_install_number || { number_status=$?; [ "$number_status" = 2 ] || fail_as "$generic"; }
 
 packument="$tmp/packument.json"
 step="asking MINDY TimeSaver's install server for the latest release"
 if gate_transfer "$packument" -sS -H 'Accept: application/json' -w '%{http_code}' 'https://gate.mindy.build/mts'; then status=$(cat "$tmp/transfer-status"); else fail_transfer "$?"; fi
 case "$status" in
 	200) ;;
-	403) if grep -qi 'no longer active\|expired\|revoked' "$packument"; then fail_as "$not_active"; else fail_as "$not_issued"; fi ;;
+	403) fail_as "$unreachable" ;;
 	429) fail_as "$too_many" ;;
 	000) fail_as "$unreachable" ;;
 	*) fail_as "$generic" ;;
@@ -737,6 +579,8 @@ step='checking the latest release details'
 grep -q '"name"[[:space:]]*:[[:space:]]*"mts"' "$packument" || fail_as "$unsigned"
 tags=$(sed -n 's/.*"dist-tags"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\1/p' "$packument" | head -n 1)
 version=$(printf '%s\n' "$tags" | sed -n 's/.*"latest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+# Repair the installed release. A later version still uses the existing yes-to-update route.
+if [ "$repairing" = true ] && [ -n "$installed_version" ]; then version=$installed_version; fi
 case "$version" in [0-9]*.[0-9]*.[0-9]*) ;; *) fail_as "$unsigned" ;; esac
 entry=$(sed -n "s/.*\"$version\"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\1/p" "$packument" | head -n 1)
 integrity=$(printf '%s\n' "$entry" | sed -n 's/.*"integrity"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
@@ -750,7 +594,7 @@ fi
 archive="$tmp/mts.tgz"
 step='installing the MINDY TimeSaver release'
 if gate_transfer "$archive" -sS -w '%{http_code}' "https://gate.mindy.build/mts/-/mts-$version.tgz"; then status=$(cat "$tmp/transfer-status"); else fail_transfer "$?"; fi
-[ "$status" = 200 ] || fail_as "MINDY TimeSaver's install server didn't send it just now. Wait a minute, then type /install-mts with your access code again."
+[ "$status" = 200 ] || fail_as "MINDY TimeSaver's install server didn't send it just now. Wait a minute, then type /install-mts again."
 step='checking the file matches the release'
 # Each check that reads the whole release runs as a recorded step (see held).
 held shasum -a 512 "$archive" >"$tmp/archive-digest" 2>/dev/null || fail_as "$unsigned"
@@ -802,7 +646,7 @@ runtime_tail=$(sed -n 's/.*"componentId":"mts-bun-runtime"\(.*\)/\1/p' "$manifes
 runtime_entry=$(printf '%s\n' "$runtime_tail" | sed -n "s|.*\({[^{}]*\"path\":\"mts-install/sealed-parts/bun/darwin-$arch/bun\"[^{}]*}\).*|\1|p" | head -n 1)
 bun_digest=$(printf '%s\n' "$runtime_entry" | sed -n 's/.*"fileDigest":"\(sha256:[^"]*\)".*/\1/p')
 bun="$release/components/mts-bun-runtime/mts-install/sealed-parts/bun/darwin-$arch/bun"
-[ -f "$bun" ] || fail_as "This version of MINDY TimeSaver came without the part it needs to run on this computer. Trying again won't fix this one, so reply to the email your access code came in and let us know."
+[ -f "$bun" ] || fail_as "This version of MINDY TimeSaver came without the part it needs to run on this computer. Trying again won't fix this one, so type /mindyteam and let us know."
 held shasum -a 256 "$bun" >"$tmp/runtime-digest" 2>/dev/null || fail_as "$unsigned"
 [ "sha256:$(sed 's/[[:space:]].*$//' "$tmp/runtime-digest")" = "$bun_digest" ] || fail_as "$unsigned"
 chmod 700 "$bun" || fail_as "$generic"
@@ -868,46 +712,21 @@ step='checking the files inside the release'
 # From here every step that runs the release's own code goes through the runner
 # (run_step, run_owned), so a stop ends it and anything it started at once.
 run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --verify-only >/dev/null 2>&1 || fail_as "$unsigned"
-run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --rollback-if-present >/dev/null 2>&1 || fail_as "$generic"
-save_code="$release/components/mts-engine/mts-install/runtime/save-access-code.ts"
-different_code_refusal=$(run_step "$bun" -e 'const { MTS_DIFFERENT_ACCESS_CODE } = await import(process.argv[1]); process.stdout.write(MTS_DIFFERENT_ACCESS_CODE);' "$release/components/mts-engine/mts-install/access-code-file.ts") || fail_as "$generic"
-save_error="$tmp/save-code-error"
-step='saving your access code on this computer'
-if run_owned "$tmp" hold line "$bun" "$save_code" >/dev/null 2>"$save_error"; then :
-elif grep -Fxq "$different_code_refusal" "$save_error"; then fail_as "$different"
-else fail_as "$generic"
+if [ "$chosen_action" != update ] && [ -f "$state_root/install-transaction.json" ]; then
+ if run_step "$bun" -e 'const tx = await Bun.file(process.argv[1]).json(); process.exit(tx.changed.some(item => item.destination === process.argv[2] && item.backup !== null) ? 0 : 1);' "$state_root/install-transaction.json" "$state_root/install-state.json"; then repairing=true; fi
+fi
+run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --rollback-if-present >"$tmp/recovery.json" 2>/dev/null || fail_as "$generic"
+recovered_current=false
+if grep -q '"recovery":"finalized"' "$tmp/recovery.json"; then
+ recovered_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^\"]*\)".*/\1/p' "$state_root/install-state.json" | head -n 1)
+ [ "$recovered_version" != "$version" ] || recovered_current=true
 fi
 install_result="$tmp/install.json"
 step='installing MINDY TimeSaver'
 had_previous=false
 [ ! -f "$state_root/install-state.json" ] || had_previous=true
-run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --prepare >"$install_result" 2>/dev/null || fail_as "$generic"
-
-# Chat runs on Anthropic's machine. Its connected folder supplies this code copy.
-# Keep the code on stdin, and keep the copy private beside the saving setting.
-chat_code_copy="$content_root/.timesaver/timesaver-access-code"
-chat_code_copy_ready="$tmp/chat-code-copy-ready"
-if run_owned "$tmp" hold raw "$bun" -e '
- const fs = require("node:fs"), path = require("node:path");
- const folder = path.join(process.argv[1], ".timesaver");
- const info = fs.lstatSync(folder);
- if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid()) process.exit(1);
- fs.chmodSync(folder, 0o700);
- const searches = path.join(folder, "search-commands");
- fs.mkdirSync(searches, { recursive: true, mode: 0o700 });
- const searchesInfo = fs.lstatSync(searches);
- if (!searchesInfo.isDirectory() || searchesInfo.isSymbolicLink() || searchesInfo.uid !== process.getuid()) process.exit(1);
- fs.chmodSync(searches, 0o700);
- const target = path.join(folder, "timesaver-access-code");
- if (fs.existsSync(target)) {
-  const old = fs.lstatSync(target);
-  if (!old.isFile() || old.isSymbolicLink() || old.nlink !== 1 || old.uid !== process.getuid()) process.exit(1);
- }
- const code = await Bun.stdin.text();
- const fd = fs.openSync(target, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW, 0o600);
- try { fs.fchmodSync(fd, 0o600); fs.writeFileSync(process.argv[2], "ready", { mode: 0o600 }); fs.writeFileSync(fd, code); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-' "$content_root" "$chat_code_copy_ready" >/dev/null 2>&1; then :
-else run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --rollback-if-present >/dev/null 2>&1 || :; fail_as "$generic"
+if [ "$recovered_current" = false ]; then
+ run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --prepare >"$install_result" 2>/dev/null || fail_as "$generic"
 fi
 
 marketplace="$state_root/plugin-marketplace"
@@ -1049,17 +868,20 @@ if [ "$had_previous" = false ]; then
  run_step /usr/bin/env MTS_STATE_ROOT="$state_root" "$bun" "$content_root/timesaver-install/runtime/privacy.ts" reports-on >/dev/null 2>&1 || { rollback_registration; fail_as "$generic"; }
 fi
 run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --finalize >/dev/null 2>&1 || { rollback_registration; fail_as "$generic"; }
-if [ "$account_plugin" = true ] && [ "${chosen_action:-}" != update ]; then printf '%s\n' '{"stage":"chat-keeping"}' >"$state_root/setup-progress.json"; fi
+if [ "${chosen_action:-}" != update ] && [ "$repairing" = false ]; then printf '%s\n' '{"stage":"chat-keeping"}' >"$state_root/setup-progress.json"; fi
 
-if [ -f "$state_root/memory-note-warning.txt" ]; then cat "$state_root/memory-note-warning.txt"; fi
+if [ -f "$state_root/memory-note-warning.txt" ]; then cat "$state_root/memory-note-warning.txt"; rm -f "$state_root/memory-note-warning.txt"; fi
 finished=true
 # An update ends here: the welcome and the setup messages are for a first install.
 if [ "${chosen_action:-}" = update ]; then printf '%s\n' "MINDY TimeSaver is now updated to version $version. Start a new session to use the new version."; exit 0; fi
-printf '%s\n' "MINDY TimeSaver is now $(folder_place)."
-if [ "${account_plugin:-false}" = true ]; then
- printf '%s\n' "Switch the mode at the bottom of the window back to Auto. Open Customize, then Plugins, then Discover, and add MINDY TimeSaver. The next step needs a new session: start one and type /install-mts to continue."
-else
- print_welcome
+if [ "$repairing" = true ]; then
+ printf '%s\n' "MINDY TimeSaver is already installed $(folder_place)."
+ show_help
+ printf '\n%s\n' "$update_offer"
+ exit 0
 fi
+printf '%s\n' "MINDY TimeSaver is now $(folder_place)."
+print_welcome
+printf '%s\n' "If you need help, type /mindyteam and your message. For all installation steps, go to https://install.mindy.build."
 
-if [ "${from_chat:-false}" = true ] && [ "$account_plugin" = false ]; then printf "MTS_HOST_UI=%s\n" "$(host_ui)"; fi
+if [ "$account_plugin" = false ]; then printf "MTS_HOST_UI=%s\n" "$(host_ui)"; fi

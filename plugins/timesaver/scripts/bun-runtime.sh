@@ -13,7 +13,7 @@ session_start=false
 case "${1:-}" in session-start.ts|*/session-start.ts) session_start=true ;; esac
 setup_missing() {
  [ "$session_start" != true ] || exit 0
- printf '%s\n' "MINDY TimeSaver isn't fully set up on this computer yet. Type /install-mts with your access code to finish, then try again." >&2
+ printf '%s\n' "MINDY TimeSaver isn't fully set up on this computer yet. Type /install-mts to finish, then try again." >&2
  exit 1
 }
 [ -f "$bun" ] && [ ! -L "$bun" ] && [ -x "$bun" ] || setup_missing
@@ -63,7 +63,7 @@ folder_unreachable() {
 if [ ! -d "$content_root" ]; then folder_unreachable; fi
 if [ ! -r "$content_root/timesaver.json" ]; then
  [ "$session_start" != true ] || exit 0
- printf '%s\n' 'MTS_SAVE_REFUSED' "MINDY TimeSaver needs a quick update before it can do that. Type /install-mts with your access code, then try again." >&2
+ printf '%s\n' 'MTS_SAVE_REFUSED' "MINDY TimeSaver needs a quick update before it can do that. Type /install-mts, then try again." >&2
  exit 1
 fi
 if MTS_CONTENT_ROOT=$(CDPATH= cd -- "$content_root" 2>/dev/null && pwd); then :; else folder_unreachable; fi

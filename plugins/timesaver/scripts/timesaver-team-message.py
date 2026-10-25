@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Send from the cloud machine. The helper reads the access code itself from the
-connected saves folder, so the code never appears in a command, its input or a
-permission box. Usage: timesaver-team-message.py --saves-root <folder>, with the
-person's message on standard input."""
+"""Send from the cloud machine using the install number in the connected saves
+folder. Usage: timesaver-team-message.py --saves-root <folder>, with the person's
+message on standard input."""
 import datetime
 import json
 import os
@@ -19,7 +18,7 @@ SENT = 'Your message has been sent to Team MINDY.'
 DUPLICATE = 'Your message was already sent to Team MINDY.'
 UNREACHABLE = "Your message hasn't reached us yet, because MINDY TimeSaver couldn't get through just now. Check you're online - your words are kept right here."
 ALLOW_DOMAIN = "This chat isn't allowed to reach us yet, so your message hasn't been sent. Open Settings, then Capabilities, and add gate.mindy.build under Additional allowed domains."
-NO_CODE = "MINDY TimeSaver couldn't read your access code from the connected folder, so your message hasn't been sent. Click the </> button, choose This computer and type /install-mts with your access code there. Then come back to this chat."
+NO_INSTALL_NUMBER = "MINDY TimeSaver couldn't read this install's number from the connected folder, so your message hasn't been sent. Click the </> button, choose This computer and type /install-mts there. Then come back to this chat."
 NOT_HERE = "MINDY TimeSaver can't send your message from this chat. Click the </> button, choose This computer and type /mindyteam there."
 
 
@@ -32,7 +31,7 @@ class NotHere(Exception):
     pass
 
 
-class NoCode(Exception):
+class NoInstallNumber(Exception):
     pass
 
 
@@ -53,8 +52,8 @@ CODE_SHAPE = re.compile(r'[A-Za-z0-9-]+\.[A-Za-z0-9_-]{40,}')
 
 def without_codes(text, code=''):
     if code:
-        text = text.replace(code, '[access code]')
-    return CODE_SHAPE.sub('[access code]', text)
+        text = text.replace(code, '[private code]')
+    return CODE_SHAPE.sub('[private code]', text)
 
 
 def failure(reason, message, code):
@@ -63,8 +62,8 @@ def failure(reason, message, code):
     return 1
 
 
-def connected_code(root):
-    """Read the code copy setup put in the connected saves folder. Nothing else reads it."""
+def connected_install_number(root):
+    """Read the copy refreshed from the Mac's canonical install number."""
     if not root or not os.path.isabs(root) or not os.path.isdir(root):
         raise NotHere()
     try:
@@ -75,29 +74,30 @@ def connected_code(root):
     if not isinstance(marker, dict) or marker.get('format') != 'mts.connected-folder.v1' or marker.get('product') != 'mts':
         raise NotHere()
     try:
-        descriptor = os.open(os.path.join(root, '.timesaver', 'timesaver-access-code'), os.O_RDONLY | os.O_NOFOLLOW)
+        descriptor = os.open(os.path.join(root, '.timesaver', 'install-number'), os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
-        raise NoCode()
+        raise NoInstallNumber()
     try:
         info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_size > 4096:
-            raise NoCode()
-        code = os.read(descriptor, 4097).decode('ascii', 'strict')
+        if not stat.S_ISREG(info.st_mode) or info.st_size != 32:
+            raise NoInstallNumber()
+        install_number = os.read(descriptor, 33).decode('ascii', 'strict')
     except (OSError, UnicodeError):
-        raise NoCode()
+        raise NoInstallNumber()
     finally:
         os.close(descriptor)
-    if not 1 <= len(code) <= 4096 or any(ord(c) <= 32 or ord(c) >= 127 for c in code):
-        raise NoCode()
-    return code
+    if len(install_number) != 32 or re.fullmatch(r'[a-f0-9]{32}', install_number) is None:
+        raise NoInstallNumber()
+    return install_number
 
 
-def send(message, code):
-    body = dict(report='mts-team-message/v1', messageId=str(uuid.uuid4()), app='Claude app',
+def send(message, install_number):
+    code = ''
+    body = dict(report='mts-team-message/v1', installNumber=install_number, messageId=str(uuid.uuid4()), app='Claude app',
                 message=without_codes(message, code).strip()[:10000], sentAt=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z'))
     try:
         request = urllib.request.Request(endpoint(), data=json.dumps(body, ensure_ascii=False, separators=(',', ':')).encode('utf-8'),
-                                         headers={'Authorization': 'Bearer ' + code, 'Content-Type': 'application/json', 'User-Agent': 'Bun/1.4.2', 'Accept': '*/*'}, method='POST')
+                                         headers={'Content-Type': 'application/json', 'User-Agent': 'Bun/1.4.2', 'Accept': '*/*'}, method='POST')
         opener = urllib.request.build_opener(NoRedirect())
         try:
             response = opener.open(request, timeout=15)
@@ -137,12 +137,12 @@ def main(arguments, message):
     if len(arguments) != 2 or arguments[0] != '--saves-root':
         return failure(NOT_HERE, message, '')
     try:
-        code = connected_code(arguments[1])
+        install_number = connected_install_number(arguments[1])
     except NotHere:
         return failure(NOT_HERE, message, '')
-    except NoCode:
-        return failure(NO_CODE, message, '')
-    return send(message, code)
+    except NoInstallNumber:
+        return failure(NO_INSTALL_NUMBER, message, '')
+    return send(message, install_number)
 
 
 if __name__ == '__main__':

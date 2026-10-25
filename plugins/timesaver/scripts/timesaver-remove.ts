@@ -64,7 +64,7 @@ function run(): void {
  const removedPath = join(stateRoot, "removed.json");
  const retry = !info(statePath);
  if (retry && (!info(removedPath) || info(removedPath)?.isSymbolicLink() || JSON.parse(readFileSync(removedPath, "utf8")).removed !== true)) {
-  throw new Error("MINDY TimeSaver isn't fully set up on this computer yet. Type /install-mts with your access code to finish, then try again.");
+  throw new Error("MINDY TimeSaver isn't fully set up on this computer yet. Type /install-mts to finish, then try again.");
  }
  // An earlier removal has no install record. Never run the engine again or
  // apply the new answer to kept saves. Only prune known plugin remnants.
