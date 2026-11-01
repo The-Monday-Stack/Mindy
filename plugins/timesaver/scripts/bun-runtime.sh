@@ -84,7 +84,7 @@ case "${1:-}:${2:-}" in
  timesaver-install/runtime/memory.ts:*) ;;
  *)
 case "${1:-}" in
- */privacy.ts|*/session-start.ts|timesaver-install/runtime/read-memory.ts|timesaver-install/runtime/remove.ts|timesaver-install/runtime/move.ts|timesaver-install/runtime/import-old-memory.ts|timesaver-install/runtime/team-message.ts|MY-MIND/MY-SYSTEM/utilities/mindy-search.ts|MY-MIND/MY-SYSTEM/utilities/claude-chat-keeping.ts|bin/save-failure.ts) ;;
+ */privacy.ts|*/session-start.ts|timesaver-install/runtime/claim-events.ts|timesaver-install/runtime/read-memory.ts|timesaver-install/runtime/remove.ts|timesaver-install/runtime/move.ts|timesaver-install/runtime/import-old-memory.ts|timesaver-install/runtime/team-message.ts|MY-MIND/MY-SYSTEM/utilities/mindy-search.ts|MY-MIND/MY-SYSTEM/utilities/claude-chat-keeping.ts|bin/save-failure.ts) ;;
  *)
   if [ "${2:-}" = --quote-labels ] && [ "$#" -eq 2 ]; then :; else
    case "${1:-}" in

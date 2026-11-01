@@ -129,6 +129,7 @@ done
 tmp=
 finished=false
 pending_report=
+last_tool_error=
 step='starting MINDY TimeSaver setup'
 cleanup() { [ -z "$tmp" ] || rm -rf "$tmp"; }
 # A stop can arrive while a function's output goes to a temporary file, so the
@@ -144,11 +145,13 @@ trap on_signal HUP INT TERM
 # Runs one step of setup's own (a program that starts nothing) in setup's
 # temporary folder, as a recorded step (see Steps below).
 held() {
+ last_tool_error=
  step_open main || return 1
  step_exec "$tmp" "$@" &
  step_started main
  step_wait main; held_status=$step_status
  step_end main
+ remember_tool_error "$held_status" "$step_files.err" "$step_files.stdout"
  return "$held_status"
 }
 
@@ -179,10 +182,17 @@ held() {
 # does, and macOS can refuse the second of the two once the first has done it.
 # The shell then prints a message, so the holder's own messages go nowhere and
 # the step gets setup's error output back on descriptor 4.
+# The status is published as soon as the command ends. During step_end, the
+# tees ignore TERM so they drain bytes while the remaining writers are ended.
+# The existing group grace bounds that drain even if a writer escaped its group.
 group_grace=100
 step_holder='trap "" HUP INT TERM
 set -m
-( exec 2>&4 4>&-; trap - HUP INT TERM; cd -- "$1" && shift && "$@" 5>&- 6<&-; printf "s%s\n" "$?" >&5 ) &
+( exec 2>&4 4>&-; trap - HUP INT TERM; step_output=$1; shift
+  ( trap "" HUP INT TERM; exec /usr/bin/tee "$step_output.stdout" ) <"$step_output.stdout-pipe" 5>&- 6<&- & stdout_tee=$!
+  ( trap "" HUP INT TERM; exec /usr/bin/tee "$step_output.err" ) <"$step_output.stderr-pipe" 5>&- 6<&- >&2 & stderr_tee=$!
+  cd -- "$1" && shift && "$@" 5>&- 6<&- >"$step_output.stdout-pipe" 2>"$step_output.stderr-pipe"
+  command_status=$?; printf "s%s\n" "$command_status" >&5; wait "$stdout_tee" "$stderr_tee" ) &
 printf "g%s\n" "$!" >&5
 exec <&6 >/dev/null 2>&1 3<&- 4>&- 5>&- 6<&-
 exec /bin/cat'
@@ -208,7 +218,7 @@ step_reader() {
 # starts, so a stop at any moment finds it.
 step_open() {
  step_count=$((step_count + 1)); step_files="$tmp/step-$step_count"
- mkfifo -m 600 "$step_files.out" "$step_files.release" || return 1
+ fifo_error=$(mkfifo -m 600 "$step_files.out" "$step_files.release" "$step_files.stdout-pipe" "$step_files.stderr-pipe" 2>&1) || { last_tool_error=$fifo_error; return 1; }
  eval "${1}_files=\$step_files ${1}_reader="
  if [ "$1" = main ]; then exec 7<>"$step_files.release" 6<"$step_files.release"; step_release_fd=6
  else exec 4<>"$step_files.release" 5<"$step_files.release"; step_release_fd=5; fi
@@ -218,7 +228,7 @@ step_open() {
 step_exec() {
  [ "$step_release_fd" = 6 ] || exec 6<&5
  exec 5>"$step_files.out" 4>&2 2>/dev/null 7>&- 8>&- 9>&-
- exec /bin/bash --posix -p -c "$step_holder" timesaver-step "$@"
+ exec /bin/bash --posix -p -c "$step_holder" timesaver-step "$step_files" "$@"
 }
 step_started() { if [ "$1" = main ]; then exec 6<&-; else exec 5<&-; fi; }
 # Waits for a step's first process to end, and leaves its exit status in step_status.
@@ -267,7 +277,7 @@ step_end() {
  [ -n "$step_files" ] || return 0
  if step_group "$step_files"; then end_groups "$step_g"; fi
  if [ "$1" = main ]; then exec 7>&- 6<&-; main_files=; else exec 4>&- 5<&-; watch_files=; fi
- rm -f "$step_files.out" "$step_files.release" "$step_files.group" "$step_files.status"
+ rm -f "$step_files.out" "$step_files.release" "$step_files.group" "$step_files.status" "$step_files.stdout-pipe" "$step_files.stderr-pipe"
 }
 # A stop ends every step that has started, together.
 stop_steps() {
@@ -406,7 +416,7 @@ owner_runner='
  [["gc.auto", "0"], ["maintenance.auto", "false"]].forEach(([key, value], index) => { env["GIT_CONFIG_KEY_" + (count + index)] = key; env["GIT_CONFIG_VALUE_" + (count + index)] = value; });
  env.GIT_CONFIG_COUNT = String(count + 2);
  const child = spawn(command, args, { cwd: directory, env, stdio: "inherit" });
- child.on("error", () => process.exit(1));
+ child.on("error", error => { process.stderr.write(JSON.stringify({ diagnostic: String(error.message).split(/[\r\n]/, 1)[0] }) + "\n"); process.exit(1); });
  // Until the command has been collected, its number can belong to no other program.
  const follow = () => { if (!tracked || !child.pid) return; if (child.exitCode === null && child.signalCode === null) tracked.take(child.pid); tracked.follow(); };
  follow();
@@ -426,11 +436,13 @@ owner_runner='
 run_owned() {
  owned_directory=$1; owned_mode=$2; shift 2
  rm -f "$tmp/app-stalled"
+ last_tool_error=
  step_open main || return 1
  step_exec "$tmp" "$bun" -e "$owner_runner" "$owned_directory" "$tmp/app-stalled" "$owned_mode" "$@" &
  step_started main
  step_wait main; owned_status=$step_status
  step_end main
+ remember_tool_error "$owned_status" "$step_files.err" "$step_files.stdout"
  return "$owned_status"
 }
 # An app's plugin command, watched for progress.
@@ -458,6 +470,7 @@ while kill -0 -- "-$group" 2>/dev/null; do
 done'
 # Usage: gate_transfer <output file> <curl arguments>. curl's -w output is left in "$tmp/transfer-status".
 gate_transfer() {
+ last_tool_error=
  transfer_output=$1; shift
  rm -f "$tmp/transfer-stalled"; : >"$transfer_output"
  step_open main || return 1
@@ -475,6 +488,7 @@ gate_transfer() {
  # The watch is ended first: until then, setup keeps the transfer's holder.
  step_end watch
  step_end main
+ remember_tool_error "$transfer_status" "$step_files.err" "$step_files.stdout"
  # curl's own code for a transfer that timed out.
  [ ! -f "$tmp/transfer-stalled" ] || transfer_status=28
  return "$transfer_status"
@@ -483,7 +497,7 @@ gate_transfer() {
 ensure_install_number() {
  install_number_file="$home/.timesaver/install-number"
  [ ! -L "$home/.timesaver" ] || return 1
- mkdir -p "$home/.timesaver" || return 1
+ mkdir -p "$home/.timesaver" 2>"$tmp/install-number.err" || { remember_tool_error "$?" "$tmp/install-number.err"; return 1; }
  if [ -e "$install_number_file" ] || [ -L "$install_number_file" ]; then
   [ -f "$install_number_file" ] && [ ! -L "$install_number_file" ] && [ -O "$install_number_file" ] || return 1
   number_bytes=$(wc -c <"$install_number_file" | tr -d ' ')
@@ -496,10 +510,10 @@ ensure_install_number() {
   # cannot refuse this retry before recovery. Stop reports stay silent meanwhile.
   return 2
  else
-  fresh_number=$(/usr/bin/openssl rand -hex 16) || return 1
-  number_temporary=$(/usr/bin/mktemp "$home/.timesaver/.install-number.XXXXXX") || return 1
+  fresh_number=$(/usr/bin/openssl rand -hex 16 2>"$tmp/install-number.err") || { remember_tool_error "$?" "$tmp/install-number.err"; return 1; }
+  number_temporary=$(/usr/bin/mktemp "$home/.timesaver/.install-number.XXXXXX" 2>"$tmp/install-number.err") || { remember_tool_error "$?" "$tmp/install-number.err"; return 1; }
   printf '%s' "$fresh_number" >"$number_temporary"
-  ln "$number_temporary" "$install_number_file" 2>/dev/null || :
+  ln "$number_temporary" "$install_number_file" 2>"$tmp/install-number.err" || remember_tool_error "$?" "$tmp/install-number.err"
   rm -f "$number_temporary"
  fi
  [ -f "$install_number_file" ] && [ ! -L "$install_number_file" ] && [ -O "$install_number_file" ] || return 1
@@ -509,8 +523,68 @@ ensure_install_number() {
  [ "${#install_number}" = 32 ]
 }
 
+# Diagnostic only. The person's fixed reply never includes tool output.
+remember_tool_error() {
+ [ "$1" = 0 ] && return 0
+ [ -z "$last_tool_error" ] || return 0
+ tool_status=$1; shift
+ tool_line=$(LC_ALL=C cat "$@" 2>/dev/null; printf ' .')
+ tool_line=${tool_line% .}
+ last_tool_error=$(clean_tool_reason "$tool_line")
+ [ -n "$last_tool_error" ] || last_tool_error="command exited with status $tool_status"
+}
+clean_tool_reason() {
+ printf '%s' "$1" | LC_ALL=C awk '
+ function remove_literal(text, secret, position, out) {
+  if (length(secret) < 8) return text;
+  out = "";
+  while ((position = index(text, secret)) > 0) { out = out substr(text, 1, position - 1) "[redacted]"; text = substr(text, position + length(secret)); }
+  return out text;
+ }
+ { body = body $0 "\n" }
+ END {
+  for (name in ENVIRON) if (toupper(name) ~ /TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL|MEMBERSHIP|ACCESS.?CODE/) secrets[++count] = ENVIRON[name];
+  for (i = 1; i <= count; i++) for (j = i + 1; j <= count; j++) if (length(secrets[j]) > length(secrets[i])) { swap = secrets[i]; secrets[i] = secrets[j]; secrets[j] = swap; }
+  for (i = 1; i <= count; i++) body = remove_literal(body, secrets[i]);
+  printf "%s", body;
+ }
+ ' | LC_ALL=C awk '
+ function diagnostic_text(line, i, char, out) {
+  sub(/^[[:space:]]*\{"diagnostic":[[:space:]]*"/, "", line);
+  sub(/"\}[[:space:]]*$/, "", line);
+  out = "";
+  for (i = 1; i <= length(line); i++) {
+   char = substr(line, i, 1);
+   if (char == "\\") {
+    char = substr(line, ++i, 1);
+    if (char ~ /^[nr]$/) break;
+    if (char ~ /^[tbf]$/) char = " ";
+   }
+   out = out char;
+  }
+  return out;
+ }
+ /^[[:space:]]*\{"diagnostic":[[:space:]]*"([^"\\]|\\.)*"\}[[:space:]]*$/ { if (!diagnostic) diagnostic = diagnostic_text($0); next }
+ /^[[:space:]]*$/ { next }
+ /^[[:space:]]*[0-9]+[[:space:]]*\|/ { next }
+ /^[[:space:]]*\^[[:space:]]*$/ { next }
+ /^[[:space:]]*[=*#~_-][=*#~_-][=*#~_-]+[[:space:]]*$/ { next }
+ { if (!first) first = $0 }
+ END { if (first) print first; if (diagnostic && diagnostic != first) print diagnostic }
+ ' | LC_ALL=C tr -d '\000-\011\013-\037\177' | sed -E \
+  -e 's/(Bearer|Basic)[[:space:]]+[^[:space:]]+/\1 [redacted]/g' \
+  -e 's/([Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Cc][Oo][Dd][Ee])[[:space:]]*[:=][[:space:]]*[^ ,;]+/\1=[redacted]/g' \
+  -e 's/[A-Za-z0-9-]{3,32}\.[A-Za-z0-9_-]{40,}/[code removed]/g' \
+  -e 's#([A-Za-z]:[\\/]|[~]?/).*#[path]#' | LC_ALL=C awk '
+ { line = substr($0, 1, 400); if (!reason) reason = line; else if (index(line, reason ": ") == 1) reason = line; else if (!index(reason, line)) reason = reason ": " line }
+ END { printf "%s", reason }
+ ' | head -c 400
+}
 json_text() { printf '%s' "$1" | LC_ALL=C tr -d '\000-\010\013-\037\177' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e "s/$(printf '\t')/\\\\t/g"; }
 report_stop() {
+ diagnostic_reason=$1
+ [ -z "$last_tool_error" ] || diagnostic_reason="$diagnostic_reason: $(clean_tool_reason "$last_tool_error")"
+ [ -z "${registration_rollback_error:-}" ] || diagnostic_reason="$diagnostic_reason; rollback also failed: $(clean_tool_reason "$registration_rollback_error")"
 	[ -n "${home:-}" ] || return 0
 	stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf 'unknown-time')
 	report_id="$(printf '%s' "$stamp" | tr ':' '-')-$$"
@@ -518,14 +592,14 @@ report_stop() {
 	note="$stop_root/$report_id.txt"
 	if mkdir -p "$stop_root" 2>/dev/null; then
 		chmod 700 "$home/.timesaver" "$stop_root" 2>/dev/null || :
-		printf 'MINDY TimeSaver setup stop\nTime (UTC): %s\nStep: %s\nReason: %s\n' "$stamp" "$step" "$1" >"$note" 2>/dev/null || :
+		printf 'MINDY TimeSaver setup stop\nTime (UTC): %s\nStep: %s\nReason: %s\n' "$stamp" "$step" "$diagnostic_reason" >"$note" 2>/dev/null || :
 		chmod 600 "$note" 2>/dev/null || :
 	fi
 	ensure_install_number || return 0
 	app='not known'
 	if [ -n "${CLAUDECODE:-}${CLAUDE_CODE_SESSION_ID:-}" ]; then app='Claude Code'
 	elif [ -n "${CODEX_THREAD_ID:-}${CODEX_SESSION_ID:-}${CODEX_CLI_PATH:-}" ]; then app=Codex; fi
-	report=$(printf '{"report":"mts-setup-stop/v1","reportId":"%s","installNumber":"%s","step":"%s","reason":"%s","stopNote":"","app":"%s","mindyVersion":"%s","macosVersion":"%s","stoppedAt":"%s"}' "$(json_text "$report_id")" "$install_number" "$(json_text "$step")" "$(json_text "$1")" "$app" "$(json_text "${installed_version:-}")" "$(json_text "$(/usr/bin/sw_vers -productVersion 2>/dev/null || :)")" "$(json_text "$stamp")")
+	report=$(printf '{"report":"mts-setup-stop/v1","reportId":"%s","installNumber":"%s","step":"%s","reason":"%s","stopNote":"","app":"%s","mindyVersion":"%s","macosVersion":"%s","stoppedAt":"%s"}' "$(json_text "$report_id")" "$install_number" "$(json_text "$step")" "$(json_text "$diagnostic_reason")" "$app" "$(json_text "${installed_version:-}")" "$(json_text "$(/usr/bin/sw_vers -productVersion 2>/dev/null || :)")" "$(json_text "$stamp")")
 	pending_report=$report
 	return 0
 }
@@ -551,8 +625,8 @@ repairing=false
 if [ "$chosen_action" != update ] && [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then repairing=true; fi
 trap on_exit EXIT
 
-[ -n "$tmp" ] || tmp=$(mktemp -d) || fail_as "$generic"
-plugin_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd -P) || fail_as "$generic"
+[ -n "$tmp" ] || tmp=$(mktemp -d 2>&1) || { last_tool_error=$tmp; tmp=; fail_as "$generic"; }
+plugin_root=$({ CDPATH= cd -- "$(dirname "$0")/.." && pwd -P; } 2>"$tmp/plugin-root.err") || { remember_tool_error "$?" "$tmp/plugin-root.err"; fail_as "$generic"; }
 home=${HOME:-}
 [ -n "$home" ] || fail_as "$generic"
 step='checking this computer can run MINDY TimeSaver'
@@ -649,7 +723,7 @@ bun="$release/components/mts-bun-runtime/mts-install/sealed-parts/bun/darwin-$ar
 [ -f "$bun" ] || fail_as "This version of MINDY TimeSaver came without the part it needs to run on this computer. Trying again won't fix this one, so type /mindyteam and let us know."
 held shasum -a 256 "$bun" >"$tmp/runtime-digest" 2>/dev/null || fail_as "$unsigned"
 [ "sha256:$(sed 's/[[:space:]].*$//' "$tmp/runtime-digest")" = "$bun_digest" ] || fail_as "$unsigned"
-chmod 700 "$bun" || fail_as "$generic"
+chmod 700 "$bun" 2>"$tmp/chmod.err" || { remember_tool_error "$?" "$tmp/chmod.err"; fail_as "$generic"; }
 
 # This verifier belongs to setup, not the download. It loads only Bun built-ins.
 # Check every listed component and refuse unlisted release files before source loads.
@@ -731,7 +805,7 @@ fi
 
 marketplace="$state_root/plugin-marketplace"
 # A registration that failed is undone, and the person is told whether the app stopped making progress.
-app_failed() { app_reason=$generic; [ ! -f "$tmp/app-stalled" ] || app_reason=$app_stalled; rollback_registration; fail_as "$app_reason"; }
+app_failed() { app_error=$last_tool_error; app_reason=$generic; [ ! -f "$tmp/app-stalled" ] || app_reason=$app_stalled; rollback_registration || app_reason=$generic; last_tool_error=$app_error; fail_as "$app_reason"; }
 installed_marketplace_name='mindy'
 installed_plugin_reference='timesaver@mindy'
 registered=$account_plugin
@@ -790,6 +864,8 @@ remove_old_registration() {
 
 claude_added=false
 codex_added=false
+claude_enabled=false
+codex_enabled=false
 has_public_plugin() {
  run_app "$1" plugin list --json >"$tmp/plugins-$1.json" 2>/dev/null || return 1
  held "$bun" -e '
@@ -797,11 +873,48 @@ has_public_plugin() {
   const entries = app === "claude" ? listing : listing.installed;
   const prior = Array.isArray(entries) && entries.find(entry => ["timesaver@mindy-memory", "timesaver@timesaver-marketplace"].includes(entry.id ?? entry.pluginId));
   await Bun.write(path + ".restore", prior ? prior.id ?? prior.pluginId : "");
-  process.exit(Array.isArray(entries) && entries.some(entry => (["timesaver@mindy", ...(app === "claude" ? ["timesaver@synced"] : [])].includes(entry.id ?? entry.pluginId)) && (() => { const [major, minor] = String(entry.version ?? "0.0.0").split(".").map(Number); return major > 1 || major === 1 && minor >= 1; })()) ? 0 : 1);
+  process.exit(Array.isArray(entries) && entries.some(entry => entry.enabled !== false && (["timesaver@mindy", ...(app === "claude" ? ["timesaver@synced"] : [])].includes(entry.id ?? entry.pluginId)) && (() => { const [major, minor] = String(entry.version ?? "0.0.0").split(".").map(Number); return major > 1 || major === 1 && minor >= 1; })()) ? 0 : 1);
  ' "$1" "$tmp/plugins-$1.json" >/dev/null 2>&1
 }
 ensure_public_marketplace() {
- run_app "$1" plugin marketplace list --json >"$tmp/public-marketplaces-$1.json" 2>/dev/null || return 1
+ public_listed=false
+ if run_app "$1" plugin marketplace list --json >"$tmp/public-marketplaces-$1.json" 2>/dev/null; then public_listed=true; fi
+ public_list_error=${last_tool_error:-}
+ # Codex can keep a clone after its registration is gone. That clone is absent
+ # from the list but still reserves its name when another source is added.
+ if held "$bun" -e '
+  const [app, path, listed] = process.argv.slice(1);
+  const retired = source => typeof source === "string" && /^(?:https:\/\/github\.com\/|git@github\.com:)?The-Monday-Stack\/mindy-plugin(?:\.git)?$/i.test(source);
+  if (app === "claude") {
+   const entry = listed === "true" ? (await Bun.file(path).json()).find(row => row.name === "mindy") : undefined;
+   process.exit(entry?.source === "github" && retired(entry.repo) || entry?.source === "git" && retired(entry.url) ? 0 : 1);
+  }
+  const { join } = require("node:path");
+  const root = process.env.CODEX_HOME || join(process.env.HOME, ".codex");
+  const config = Bun.file(join(root, "config.toml"));
+  let configured;
+  try { configured = Bun.TOML.parse(await config.text())?.marketplaces?.["mindy"]; } catch {}
+  if (configured) process.exit(configured.source_type === "git" && retired(configured.source) ? 0 : 1);
+  const entry = listed === "true" ? (await Bun.file(path).json()).marketplaces?.find(row => row.name === "mindy") : undefined;
+  if (entry) process.exit(entry.marketplaceSource?.sourceType === "git" && retired(entry.marketplaceSource.source) ? 0 : 1);
+  const gitConfig = Bun.file(join(root, ".tmp/marketplaces/mindy/.git/config"));
+  if (!(await gitConfig.exists())) process.exit(1);
+  let inOrigin = false, origin;
+  for (const line of (await gitConfig.text()).split(/\r?\n/)) {
+   if (/^\s*\[/.test(line)) inOrigin = /^\s*\[remote\s+"origin"\]\s*$/i.test(line);
+   else if (inOrigin) { const url = line.match(/^\s*url\s*=\s*(.*?)\s*$/i); if (url) origin = url[1]; }
+  }
+  const current = source => listed === "true" && typeof source === "string" && /^(?:https:\/\/github\.com\/|git@github\.com:)?The-Monday-Stack\/Mindy(?:\.git)?$/i.test(source);
+  process.exit(retired(origin) || current(origin) ? 0 : 1);
+ ' "$1" "$tmp/public-marketplaces-$1.json" "$public_listed" >/dev/null 2>&1; then
+  # Rollback does not restore the retired repository: re-adding it serves nobody.
+  if [ "$1" = claude ]; then run_app claude plugin marketplace remove mindy --scope user >/dev/null 2>&1 || return 1
+  else run_app codex plugin marketplace remove mindy --json >/dev/null 2>&1 || return 1; fi
+  run_app "$1" plugin list --json >"$tmp/plugins-$1.json" 2>/dev/null || return 1
+  run_app "$1" plugin marketplace list --json >"$tmp/public-marketplaces-$1.json" 2>/dev/null || return 1
+  public_listed=true
+ fi
+ if [ "$public_listed" != true ]; then last_tool_error=$public_list_error; return 1; fi
  if held "$bun" -e '
   const [app, path] = process.argv.slice(1), listing = await Bun.file(path).json();
   const entries = app === "claude" ? listing : listing.marketplaces;
@@ -830,8 +943,22 @@ remove_private_copy() {
  fi
 }
 rollback_registration() {
+ registration_error=$last_tool_error
+ registration_status=0
+ rollback_registration_commands || registration_status=$?
+ if [ "$registration_status" != 0 ]; then
+  registration_rollback_error=$last_tool_error
+  [ -n "$registration_rollback_error" ] || registration_rollback_error="command exited with status $registration_status"
+ fi
+ last_tool_error=$registration_error
+ return "$registration_status"
+}
+rollback_registration_commands() {
  if [ "$claude_added" = true ]; then run_app claude plugin uninstall "$installed_plugin_reference" --scope user >/dev/null 2>&1 || :; fi
  if [ "$codex_added" = true ]; then run_app codex plugin remove "$installed_plugin_reference" --json >/dev/null 2>&1 || :; fi
+ if [ "$claude_enabled" = true ]; then run_app claude plugin disable "$installed_plugin_reference" --scope user >/dev/null 2>&1 || :; fi
+ # Codex 0.164.0 has no plugin-disable command. An existing plugin that
+ # setup switched on (codex_enabled) stays installed and on during rollback.
  run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --rollback >/dev/null 2>&1 || return 1
  if [ "$had_previous" = true ]; then
   for app in claude codex; do
@@ -849,25 +976,37 @@ if [ "$claude_present" = true ] && [ "$account_plugin" = false ]; then
   if ! ensure_public_marketplace claude; then app_failed; fi
   if held "$bun" -e 'const value = await Bun.file(process.argv[1]).json(); process.exit(value.some(row => row.id === "timesaver@mindy") ? 0 : 1);' "$tmp/plugins-claude.json"; then
    if ! run_app_in "$content_root" claude plugin update "$installed_plugin_reference" --scope user >/dev/null 2>&1; then app_failed; fi
-  elif ! run_app_in "$content_root" claude plugin install "$installed_plugin_reference" --scope user >/dev/null 2>&1; then app_failed; fi
-  claude_added=true
+   if held "$bun" -e 'const value = await Bun.file(process.argv[1]).json(); process.exit(value.some(row => row.id === "timesaver@mindy" && row.enabled === false) ? 0 : 1);' "$tmp/plugins-claude.json"; then
+    if ! run_app_in "$content_root" claude plugin enable "$installed_plugin_reference" --scope user >/dev/null 2>&1; then app_failed; fi
+    claude_enabled=true
+   fi
+  else
+   if ! run_app_in "$content_root" claude plugin install "$installed_plugin_reference" --scope user >/dev/null 2>&1; then app_failed; fi
+   claude_added=true
+  fi
  fi
  registered=true
 fi
 if [ "$codex_present" = true ]; then
  if ! has_public_plugin codex; then
   if ! ensure_public_marketplace codex || ! run_app_in "$content_root" codex plugin add "$installed_plugin_reference" --json >/dev/null 2>&1; then app_failed; fi
-  codex_added=true
+  if held "$bun" -e 'const value = await Bun.file(process.argv[1]).json(); process.exit(value.installed.some(row => row.pluginId === "timesaver@mindy") ? 0 : 1);' "$tmp/plugins-codex.json"; then
+   if held "$bun" -e 'const value = await Bun.file(process.argv[1]).json(); process.exit(value.installed.some(row => row.pluginId === "timesaver@mindy" && row.enabled === false) ? 0 : 1);' "$tmp/plugins-codex.json"; then codex_enabled=true; fi
+  else
+   codex_added=true
+  fi
  fi
  registered=true
 fi
-if [ "$registered" != true ]; then rollback_registration; fail_as "$generic"; fi
+if [ "$registered" != true ]; then rollback_registration || :; fail_as "$generic"; fi
 remove_private_copy || app_failed
 remove_old_registration
 if [ "$had_previous" = false ]; then
- run_step /usr/bin/env MTS_STATE_ROOT="$state_root" "$bun" "$content_root/timesaver-install/runtime/privacy.ts" reports-on >/dev/null 2>&1 || { rollback_registration; fail_as "$generic"; }
+ run_step /usr/bin/env MINDY_INSTALLER_REPORTS=1 MTS_STATE_ROOT="$state_root" "$bun" "$content_root/timesaver-install/runtime/privacy.ts" reports-on >/dev/null 2>&1 || { rollback_registration || :; fail_as "$generic"; }
 fi
-run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --finalize >/dev/null 2>&1 || { rollback_registration; fail_as "$generic"; }
+run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --finalize >/dev/null 2>&1 || { rollback_registration || :; fail_as "$generic"; }
+# Refreshing Events cannot undo a successful install or update.
+(trap '' HUP INT TERM; /usr/bin/env MTS_CONTENT_ROOT="$content_root" "$bun" "$content_root/timesaver-install/runtime/refresh-events-option.ts" || :) </dev/null >/dev/null 2>&1 8>&- &
 if [ "${chosen_action:-}" != update ] && [ "$repairing" = false ]; then printf '%s\n' '{"stage":"chat-keeping"}' >"$state_root/setup-progress.json"; fi
 
 if [ -f "$state_root/memory-note-warning.txt" ]; then cat "$state_root/memory-note-warning.txt"; rm -f "$state_root/memory-note-warning.txt"; fi
