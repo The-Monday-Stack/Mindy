@@ -371,6 +371,20 @@ version=
 active_version=
 harness_list=
 harnesses_checked=false
+# Ready before the first stop, including stops before app discovery.
+claude_command=
+codex_command=
+claude_candidate='not looked up yet'
+codex_candidate='not looked up yet'
+claude_resolved='not looked up yet'
+codex_resolved='not looked up yet'
+claude_probes='not looked up yet'
+codex_probes='not looked up yet'
+cmux_presence=absent
+[ "${CMUX_SURFACE_ID+x}" != x ] || cmux_presence=present
+app_stop_message=
+probe_pid=
+watchdog_pid=
 # The gate's own sentences (build-machine-stack src/mindy-gate-rules.js), matched exactly and never
 # relayed: the earlier words, and the words the gate uses since it took the decided wording. The
 # Old gate replies are compared only. The client shows its own setup sentences.
@@ -764,6 +778,7 @@ tell() {
 		esac
 	fi
 	if [ "$step" = "checking for installed memory" ]; then said_line=$memory_first_message; fi
+	if [ -n "$app_stop_message" ]; then said_line=$app_stop_message; fi
 	say "$said_line" || :
 	told=true
 	if [ "$note_kept" = true ]; then
@@ -867,11 +882,15 @@ keep_stop() {
 			printf 'MINDY version on the download server: %s\n' "${version:-not known yet}"
 			printf 'MINDY version already installed: %s\n' "${active_version:-none}"
 			if [ "$harnesses_checked" = true ]; then printf 'Harnesses for this setup: %s\n' "${harness_list:-none found}"; else printf 'Harnesses for this setup: not checked yet\n'; fi
+			printf 'CMUX_SURFACE_ID: %s\n' "$cmux_presence"
+			printf 'Claude candidate: %s\nClaude resolved file: %s\nClaude probes: %s\n' "$claude_candidate" "$claude_resolved" "$claude_probes"
+			printf 'Codex candidate: %s\nCodex resolved file: %s\nCodex probes: %s\n' "$codex_candidate" "$codex_resolved" "$codex_probes"
 			printf 'Plugin version: %s\n' "$(plugin_version)"
 			printf 'Machine (uname -m): %s\n' "$(uname -m 2>/dev/null || printf 'unknown')"
 			printf 'macOS: %s\n' "$(sw_vers -productVersion 2>/dev/null || printf 'unknown')"
 			if [ -n "$tmp" ]; then
 				for evidence in "$tmp"/*.out "$tmp"/*.err "$tmp"/packument.json; do
+					[ "$evidence" != "$tmp/app-probe.out" ] && [ "$evidence" != "$tmp/app-probe.err" ] || continue
 					[ -s "$evidence" ] || continue
 					printf '\n--- %s ---\n' "${evidence##*/}"
 					redact <"$evidence" | head -c 65536
@@ -886,10 +905,20 @@ keep_stop() {
 	return 1
 }
 
+# Probes and their timers run in separate process groups, including any children they start.
+stop_app_probe() {
+	[ -z "$probe_pid" ] || kill -KILL -- "-$probe_pid" 2>/dev/null || :
+	[ -z "$watchdog_pid" ] || kill -KILL -- "-$watchdog_pid" 2>/dev/null || :
+	[ -z "$probe_pid" ] || wait "$probe_pid" 2>/dev/null || :
+	[ -z "$watchdog_pid" ] || wait "$watchdog_pid" 2>/dev/null || :
+	probe_pid=; watchdog_pid=
+}
+
 cleanup() {
 	exit_status=$?
 	set +e
 	trap '' HUP INT TERM
+	stop_app_probe
 	if [ "$finished" = false ]; then
 		if [ "$said" = false ]; then
 			said=true
@@ -980,62 +1009,6 @@ version_entry=$(sed -n "s/.*\"$version\"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\
 integrity=$(printf '%s\n' "$version_entry" | sed -n 's/.*"integrity"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 case "$integrity" in sha512-*) ;; *) stop "the setup server's answer for MINDY $version has no sha512 integrity value" ;; esac
 
-# Enrol only the apps whose command is on this Mac: the install runs `claude --version` or
-# `codex --version` for each one it registers, so an app without its command stops the install.
-# An update keeps the apps recorded when MINDY was installed, and adds only an app that is on this
-# Mac now and that MINDY is not yet set up in (see the check just below).
-begin 'checking which apps are on this computer'
-# Each app's command is looked for where that app installs it, not only on PATH, because the shell
-# that runs setup is the shell of whichever app the member typed the command in, and the other app's
-# command may not be on its PATH. This one lookup is used for a first install, an update and an add.
-# Claude Code: on PATH, then ~/.local/bin/claude (its own installer's place, which a Terminal's PATH
-# usually holds and Claude Code's shell may not), then ~/.claude/local/claude (its earlier place).
-# Codex, the ChatGPT app: on PATH, then CODEX_CLI_PATH, which the app sets to its own copy of codex,
-# then that copy where the app keeps it, <Applications>/ChatGPT.app/Contents/Resources/codex-cli/
-# CodexCLI.app/Contents/MacOS/codex, and where an earlier build of the app kept it,
-# <Applications>/Codex.app/Contents/Resources/codex, in /Applications and in ~/Applications. Both
-# were read from the installed app on 4 October 2026. CODEX_CLI_PATH is used only as a whole path,
-# with no ":" that would split it into two PATH entries and no line break that would hide a second
-# path after the first, to an executable file named codex. A found
-# command that is not on PATH gets its folder put at the end of PATH, for this script and the engine
-# it runs, which runs `claude --version` or `codex --version` for each app it registers.
-# The two application folders are fixed, and nothing a computer has set can name another (row 2 fix
-# round 8). A test keeps the Mac it runs on out of its answers by naming its own folder in its own copy
-# of this script.
-# find_app_command <claude|codex> prints the command's full path, or nothing.
-find_app_command() {
-	app_found=$(command -v "$1" 2>/dev/null) || app_found=
-	case "$app_found" in /*) if [ -f "$app_found" ] && [ -x "$app_found" ]; then printf '%s\n' "$app_found"; return 0; fi ;; esac
-	if [ "$1" = claude ]; then
-		app_candidates="$home/.local/bin/claude
-$home/.claude/local/claude"
-	else
-		app_candidates=${CODEX_CLI_PATH:-}
-		case "$app_candidates" in *:*|*'
-'*) app_candidates= ;; /*/codex) ;; *) app_candidates= ;; esac
-		for app_folder in /Applications "$home/Applications"; do
-			app_candidates="${app_candidates:+$app_candidates
-}$app_folder/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex
-$app_folder/Codex.app/Contents/Resources/codex"
-		done
-	fi
-	while IFS= read -r app_candidate; do
-		if [ -n "$app_candidate" ] && [ -f "$app_candidate" ] && [ -x "$app_candidate" ]; then printf '%s\n' "$app_candidate"; return 0; fi
-	done <<APP_CANDIDATES
-$app_candidates
-APP_CANDIDATES
-	return 0
-}
-claude_command=$(find_app_command claude)
-codex_command=$(find_app_command codex)
-for app_command_found in "$claude_command" "$codex_command"; do
-	[ -n "$app_command_found" ] || continue
-	if ! command -v "${app_command_found##*/}" >/dev/null 2>&1; then
-		PATH="$PATH:${app_command_found%/*}"
-		export PATH
-	fi
-done
-
 begin 'checking which MINDY is already here'
 active="$client_root/.mindy/release-selection/active-release.json"
 if [ -f "$active" ]; then active_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$active" | head -n 1); fi
@@ -1047,28 +1020,6 @@ if [ -n "$active_version" ]; then
  # unsent causes already tell the member to message us in the group.
  unsigned_unsent_message="$unsigned_unsent_message Open your MINDY folder and type /bwmteam if you need help."
 fi
-if [ "$active_version" = "$version" ]; then
-	# The latest release is already here. An app put on this Mac after MINDY, Claude Code or the
-	# ChatGPT app (Codex), still has no MINDY: the active receipt names the apps MINDY was set up in,
-	# and a receipt that names none is one for both. Each app on this Mac that is not named gets MINDY
-	# by the same steps as an update, with that app added to the ones recorded. With nothing to add,
-	# setup says MINDY is already installed and does nothing else.
-	begin 'checking which apps are on this computer'
-	set_up=$(sed -n 's/.*"harnesses"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$active" | head -n 1)
-	set_up_list=
-	if [ -z "$set_up" ]; then set_up_list='claude-code codex'; else
-		case "$set_up" in *'"claude-code"'*) set_up_list='claude-code' ;; esac
-		case "$set_up" in *'"codex"'*) set_up_list="${set_up_list:+$set_up_list }codex" ;; esac
-	fi
-	adding_an_app=false
-	for app in claude-code codex; do
-		app_command=$claude_command
-		if [ "$app" = codex ]; then app_command=$codex_command; fi
-		case " $set_up_list " in
-			*" $app "*) harness_list="${harness_list:+$harness_list }$app" ;;
-			*) if [ -n "$app_command" ] || { [ "$app" = claude-code ] && [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ]; }; then harness_list="${harness_list:+$harness_list }$app"; adding_an_app=true; fi ;;
-		esac
-	done
  repair_install_record() {
   begin 'setting up MINDY on this computer'
   MINDY_INSTALLER_REPORTS=1; export MINDY_INSTALLER_REPORTS
@@ -1082,33 +1033,253 @@ if [ "$active_version" = "$version" ]; then
    stop "$(reason_of "$tmp/record-repair.out")"
   fi
  }
-	if [ "$adding_an_app" = false ]; then repair_install_record; finished=true; printf '%s\n' 'MINDY is already installed.'; exit 0; fi
-	# Enrolling grows the record of the apps before the install runs, and the record cannot shrink again.
-	# So nothing is enrolled unless the command of every app in the new list answers --version, as the
-	# install will ask of it. When one does not, nothing is added and setup says what it said before.
-	for app in $harness_list; do
+# A chosen repair of the current release only restores local files and the install record.
+# Neither that engine route nor Setup needs to run the apps for this repair.
+if [ "$chosen_action" = repair ] && [ "$active_version" = "$version" ]; then
+ repair_install_record; finished=true; printf '%s\n' 'MINDY is already installed.'; exit 0
+fi
+
+# Enrol only the apps whose command is on this Mac: the install runs `claude --version` or
+# `codex --version` for each one it registers. Setup checks both app commands before selecting them.
+# An update keeps the apps recorded when MINDY was installed, and adds only an app that is on this
+# Mac now and that MINDY is not yet set up in (see the check just below).
+begin 'checking which apps are on this computer'
+# Each app's command is looked for where that app installs it, not only on PATH, because the shell
+# that runs setup is the shell of whichever app the member typed the command in, and the other app's
+# command may not be on its PATH. This one lookup is used for a first install, an update and an add.
+# Claude Code: on PATH, then ~/.local/bin/claude (its own installer's place, which a Terminal's PATH
+# usually holds and Claude Code's shell may not), then ~/.claude/local/claude (its earlier place).
+# Codex, the ChatGPT app: on PATH, then CODEX_CLI_PATH, which the app sets to its own copy of codex,
+# then the ChatGPT and earlier Codex bundle locations under /Applications and ~/Applications.
+# Check each candidate before passing bare app names to the engine. No app output is relayed.
+# Each probe has ten seconds, including a command that never returns. Cancel the timer on success.
+app_probe() {
+ # macOS /bin/sh's monitor mode gives each background job its own process group.
+ # Turn it off again before waiting so Setup's other commands keep their existing behaviour.
+ set -m
+ "$@" </dev/null >"$tmp/app-probe.out" 2>"$tmp/app-probe.err" &
+ probe_pid=$!
+ (
+  sleep 10
+  kill -KILL -- "-$probe_pid" 2>/dev/null || :
+ ) &
+ watchdog_pid=$!
+ set +m
+ if wait "$probe_pid" 2>/dev/null; then probe_status=0; else probe_status=$?; fi
+ stop_app_probe
+}
+
+# plutil is already used by Setup. Wrap the answer so its root type can be checked too.
+# Match the engine's marketplace reader: records, at most one MINDY entry, absolute source.
+app_marketplace_shape() {
+ { printf '{"answer":'; cat "$tmp/app-probe.out"; printf '}'; } >"$tmp/app-answer.json"
+ list_key=answer
+ if [ "$1" = codex ]; then
+  [ "$(/usr/bin/plutil -type answer "$tmp/app-answer.json" 2>/dev/null)" = dictionary ] || return 1
+  list_key=answer.marketplaces
+ fi
+ count=$(/usr/bin/plutil -extract "$list_key" raw -expect array -o - "$tmp/app-answer.json" 2>/dev/null) || return 1
+ index=0; matches=0
+ while [ "$index" -lt "$count" ]; do
+  key="$list_key.$index"
+  [ "$(/usr/bin/plutil -type "$key" "$tmp/app-answer.json" 2>/dev/null)" = dictionary ] || return 1
+  name=$(/usr/bin/plutil -extract "$key.name" raw -o - "$tmp/app-answer.json" 2>/dev/null) || name=
+  if [ "$name" = mindy-marketplace ]; then
+   matches=$((matches + 1)); [ "$matches" -le 1 ] || return 1
+   if [ "$1" = claude ]; then
+    source_key="$key.path"
+    source_type=$(/usr/bin/plutil -type "$source_key" "$tmp/app-answer.json" 2>/dev/null) || source_type=missing
+    case "$source_type" in missing|'(any)') source_key="$key.installLocation" ;; esac
+    source=$(/usr/bin/plutil -extract "$source_key" raw -expect string -o - "$tmp/app-answer.json" 2>/dev/null) || return 1
+   else
+    source_key="$key.root"
+    source_type=$(/usr/bin/plutil -type "$key.marketplaceSource" "$tmp/app-answer.json" 2>/dev/null) || source_type=missing
+    case "$source_type" in
+     dictionary) source_key="$key.marketplaceSource.source" ;;
+     missing|'(any)') ;;
+     *) source_value=$(/usr/bin/plutil -extract "$key.marketplaceSource" raw -o - "$tmp/app-answer.json" 2>/dev/null) || return 1
+        case "$source_type:$source_value" in bool:false|integer:0|float:0|string:) ;; *) return 1 ;; esac ;;
+    esac
+    source=$(/usr/bin/plutil -extract "$source_key" raw -expect string -o - "$tmp/app-answer.json" 2>/dev/null) || return 1
+   fi
+   case "$source" in /*) ;; *) return 1 ;; esac
+  fi
+  index=$((index + 1))
+ done
+}
+
+# Follow symlinks, including relative targets, without requiring a downloaded runtime.
+resolve_app_file() {
+ resolved=$1; links=0
+ while [ -L "$resolved" ]; do
+  links=$((links + 1)); [ "$links" -le 40 ] || { printf '%s' 'unresolved symlink'; return; }
+  target=$(readlink "$resolved") || { printf '%s' 'unresolved symlink'; return; }
+  case "$target" in /*) resolved=$target ;; *) resolved="${resolved%/*}/$target" ;; esac
+ done
+ resolved_dir=$(CDPATH= cd -P "${resolved%/*}" && pwd) || return
+ printf '%s/%s' "$resolved_dir" "${resolved##*/}"
+}
+
+find_app_command() {
+ app_found=$(command -v "$1" 2>/dev/null) || app_found=
+ app_candidates=$app_found
+ if [ "$1" = claude ]; then
+  app_candidates="$app_candidates
+$home/.local/bin/claude
+$home/.claude/local/claude"
+ else
+  codex_hint=${CODEX_CLI_PATH:-}
+  case "$codex_hint" in *:*|*'
+'*) codex_hint= ;; /*/codex) ;; *) codex_hint= ;; esac
+  app_candidates="$app_candidates
+$codex_hint"
+  for app_folder in /Applications "$home/Applications"; do
+   app_candidates="$app_candidates
+$app_folder/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex
+$app_folder/Codex.app/Contents/Resources/codex"
+  done
+ fi
+ app_command=; app_chosen='none answered'; app_resolved='none answered'; app_probes=; app_seen=
+ while IFS= read -r app_candidate; do
+  case "$app_candidate" in /*) ;; *) continue ;; esac
+  [ -f "$app_candidate" ] && [ -x "$app_candidate" ] || continue
+  case "
+$app_seen
+" in *"
+$app_candidate
+"*) continue ;; esac
+  app_seen="$app_seen
+$app_candidate"
+  candidate_resolved=$(resolve_app_file "$app_candidate")
+  app_probe "$app_candidate" --version
+  version_status=$probe_status
+  marketplace_status='not run'; shape='not checked'
+  if [ "$version_status" = 0 ]; then
+   app_probe "$app_candidate" plugin marketplace list --json
+   marketplace_status=$probe_status
+   shape=invalid
+   if [ "$marketplace_status" = 0 ] && app_marketplace_shape "$1"; then shape=valid; fi
+  fi
+  app_probes="${app_probes:+$app_probes
+}$app_candidate -> $candidate_resolved; --version exit $version_status; plugin marketplace list --json exit $marketplace_status; JSON $shape"
+  if [ "$version_status" = 0 ] && [ "$marketplace_status" = 0 ] && [ "$shape" = valid ]; then
+   app_command=$app_candidate; app_chosen=$app_candidate; app_resolved=$candidate_resolved
+   break
+  fi
+ done <<APP_CANDIDATES
+$app_candidates
+APP_CANDIDATES
+ [ -n "$app_probes" ] || app_probes='no executable candidate found; probes not run'
+ case "$1" in
+  claude) claude_command=$app_command; claude_candidate=$app_chosen; claude_resolved=$app_resolved; claude_probes=$app_probes ;;
+  codex) codex_command=$app_command; codex_candidate=$app_chosen; codex_resolved=$app_resolved; codex_probes=$app_probes ;;
+ esac
+}
+find_app_command claude
+find_app_command codex
+# The selected folder must precede any rejected stand-in for the engine's bare commands.
+for app_command_found in "$claude_command" "$codex_command"; do
+ [ -n "$app_command_found" ] || continue
+ # Keep a command that already resolves correctly in place. Re-prepending its shared bin
+ # could otherwise put the other app's rejected stand-in back ahead of its chosen file.
+ if [ "$(command -v "${app_command_found##*/}" 2>/dev/null)" != "$app_command_found" ]; then
+  PATH="${app_command_found%/*}:$PATH"
+  export PATH
+ fi
+done
+# Two selected folders may each contain a rejected copy of the other app. If the final PATH
+# shadows either choice, expose only the chosen files together in a private first folder.
+app_path_conflict=false
+for app_command_found in "$claude_command" "$codex_command"; do
+ [ -n "$app_command_found" ] || continue
+ [ "$(command -v "${app_command_found##*/}" 2>/dev/null)" = "$app_command_found" ] || app_path_conflict=true
+done
+if [ "$app_path_conflict" = true ]; then
+ mkdir -m 700 "$tmp/app-commands"
+ for app_command_found in "$claude_command" "$codex_command"; do
+  [ -n "$app_command_found" ] || continue
+  ln -s "$app_command_found" "$tmp/app-commands/${app_command_found##*/}"
+ done
+ PATH="$tmp/app-commands:$PATH"; export PATH
+fi
+# Check all choices after PATH is complete, including the private symlinks when needed.
+for app_command_found in "$claude_command" "$codex_command"; do
+ [ -n "$app_command_found" ] || continue
+ app_bare=$(command -v "${app_command_found##*/}" 2>/dev/null) || app_bare=
+ [ -n "$app_bare" ] && [ "$(resolve_app_file "$app_bare")" = "$(resolve_app_file "$app_command_found")" ] || stop 'a selected app command is shadowed after preparing PATH'
+done
+claude_ready=false; codex_ready=false
+if [ -n "$claude_command" ] || { [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ] && ! command -v claude >/dev/null 2>&1; }; then claude_ready=true; fi
+[ -z "$codex_command" ] || codex_ready=true
+
+# Collect recorded apps before deciding whether this run only repairs the install record.
+begin 'checking which apps are on this computer'
+recorded_apps=
+if [ "$action" = update ]; then
+ recorded_apps=$(sed -n 's/.*"harnesses"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$active" | head -n 1)
+ recorded_verifier=$(sed -n 's/.*"harnessIds"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$client_root/.mindy/update-verifier.json" 2>/dev/null | head -n 1)
+ recorded_apps="$recorded_apps $recorded_verifier"
+fi
+if [ "$active_version" = "$version" ]; then
+	# The latest release is already here. Use the verifier when the receipt predates app lists.
+	# Each answering app on this Mac that is not recorded gets MINDY
+	# by the same steps as an update, with that app added to the ones recorded. With nothing to add,
+	# setup says MINDY is already installed and does nothing else.
+	begin 'checking which apps are on this computer'
+	set_up_list=
+	case "$recorded_apps" in *'"claude-code"'*) set_up_list='claude-code' ;; esac
+	case "$recorded_apps" in *'"codex"'*) set_up_list="${set_up_list:+$set_up_list }codex" ;; esac
+	adding_an_app=false
+	for app in claude-code codex; do
 		app_command=$claude_command
 		if [ "$app" = codex ]; then app_command=$codex_command; fi
-		if [ "$app" = claude-code ] && [ -z "$app_command" ] && [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ]; then continue; fi
-		if [ -z "$app_command" ] || ! "$app_command" --version >/dev/null 2>&1 </dev/null; then repair_install_record; finished=true; printf '%s\n' 'MINDY is already installed.'; exit 0; fi
+		case " $set_up_list " in
+			*" $app "*) harness_list="${harness_list:+$harness_list }$app" ;;
+			*) if { [ "$app" = claude-code ] && [ "$claude_ready" = true ]; } || { [ "$app" = codex ] && [ "$codex_ready" = true ]; }; then harness_list="${harness_list:+$harness_list }$app"; adding_an_app=true; fi ;;
+		esac
 	done
+
+	if [ "$adding_an_app" = false ]; then repair_install_record; finished=true; printf '%s\n' 'MINDY is already installed.'; exit 0; fi
+fi
+
+# Updates and add-app transactions must retain every recorded app. A local-only repair has
+# already finished above, before this check (and a chosen current repair before discovery).
+if [ "$action" = update ]; then
+ for app in claude-code codex; do
+  case "$recorded_apps" in *\"$app\"*) ;; *) continue ;; esac
+  ready=$claude_ready; member_app='Claude Code'
+  if [ "$app" = codex ]; then ready=$codex_ready; member_app=ChatGPT; fi
+  if [ "$ready" = false ]; then
+   if [ "$cmux_presence" = present ]; then
+    app_stop_message="I couldn't continue with MINDY because $member_app isn't answering as needed. Open Claude Code or ChatGPT outside cmux, for example by starting Claude Code from Apple's Terminal app. Then $start_mindy with your access code and choose the same step again."
+   else
+    app_stop_message="I couldn't continue with MINDY because $member_app isn't answering as needed. Install or update $member_app, open it again, then $start_mindy with your access code and choose the same step again. If it still stops, open your MINDY folder and type /bwmteam for help."
+   fi
+   stop "recorded app $app has no candidate answering version and marketplace-list checks"
+  fi
+ done
 fi
 
 begin 'checking which apps are on this computer'
 if [ "$action" = update ] && [ -z "$harness_list" ]; then
-	recorded=$(sed -n 's/.*"harnessIds"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$client_root/.mindy/update-verifier.json" 2>/dev/null | head -n 1)
-	case "$recorded" in *'"claude-code"'*) harness_list='claude-code' ;; esac
-	case "$recorded" in *'"codex"'*) harness_list="${harness_list:+$harness_list }codex" ;; esac
+ case "$recorded_apps" in *'"claude-code"'*) harness_list='claude-code' ;; esac
+ case "$recorded_apps" in *'"codex"'*) harness_list="${harness_list:+$harness_list }codex" ;; esac
+ # A chosen add-app also works when a newer release is available.
+ if [ "$chosen_action" = add-app ]; then
+  harness_list=
+  [ "$claude_ready" = false ] || harness_list=claude-code
+  [ "$codex_ready" = false ] || harness_list="${harness_list:+$harness_list }codex"
+ fi
 fi
 if [ -z "$harness_list" ]; then
-	# With no record yet, an app is enrolled only when its command answers --version, as the install
-	# will ask of it, so an app the member does not use never stops their first install. One left out
-	# can be added later by typing the command again.
-	if { [ -n "$claude_command" ] && "$claude_command" --version >/dev/null 2>&1 </dev/null; } || [ "${MINDY_CLAUDE_LOCAL:-}" = 1 ]; then harness_list='claude-code'; fi
-	if [ -n "$codex_command" ] && "$codex_command" --version >/dev/null 2>&1 </dev/null; then harness_list="${harness_list:+$harness_list }codex"; fi
+ [ "$claude_ready" = false ] || harness_list=claude-code
+ [ "$codex_ready" = false ] || harness_list="${harness_list:+$harness_list }codex"
 fi
 harnesses_checked=true
-[ -n "$harness_list" ] || stop "neither claude nor codex is on this computer's PATH"
+if [ -z "$harness_list" ]; then
+ app_stop_message="I couldn't set up MINDY because neither Claude Code nor ChatGPT is answering as needed. Update the app you want to use, then $start_mindy with your access code there."
+ stop 'neither claude nor codex has a candidate answering version and marketplace-list checks'
+fi
 set --
 for harness in $harness_list; do set -- "$@" --harness "$harness"; done
 
@@ -1249,6 +1420,22 @@ fi
 
 finished=true
 printf '%s\n' 'Build With Mindy is now in a folder called mindy in your home folder.'
+member_apps=
+case " $harness_list " in *' claude-code '*) member_apps='Claude Code' ;; esac
+case " $harness_list " in *' codex '*) member_apps="${member_apps:+$member_apps and }ChatGPT" ;; esac
+printf 'I set up MINDY for %s. Follow the next steps below to start using it.\n' "$member_apps"
+if [ "$action" = install ]; then
+ for app in claude-code codex; do
+  case " $harness_list " in *" $app "*) continue ;; esac
+  member_app='Claude Code'; app_probes=$claude_probes
+  if [ "$app" = codex ]; then member_app=ChatGPT; app_probes=$codex_probes; fi
+  [ "$app_probes" != 'no executable candidate found; probes not run' ] || continue
+  printf "I left out %s because it isn't answering as needed. If you want MINDY there later, install or update that app, then $start_mindy with your access code and choose to add MINDY to another app.\n" "$member_app"
+ done
+fi
+if [ "$action" = update ]; then
+ printf '%s\n' 'I updated MINDY. Close any Claude Code or ChatGPT chats opened before this update, then start a new one and follow the next steps below.'
+fi
 # The engine's receipt says "codexPet":"placed" when MINDY's Codex pet is in the member's pets (an engine
 # from before the pet says nothing). The /install-bwm skill tells the member only when this line is printed.
 if grep -q '"codexPet":"placed"' "$install" 2>/dev/null; then printf '%s\n' "MINDY's Codex pet is in place."; fi
