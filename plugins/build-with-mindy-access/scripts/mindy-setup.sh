@@ -191,10 +191,67 @@ try {
 } catch { fail(); }
 BWM_CURRENT_CHAT
 }
+# Only a chosen step may use this Mac's saved code. The public plugin cannot import the installed
+# engine, so these addresses match addressFor(memberAccessCodeAudience()). Tests check that match.
+# Output is captured by the calling shell. No saved-code bytes enter an argument, file or environment.
+saved_code_on_this_mac() {
+ chat_bun="${MTS_STATE_ROOT:-${HOME:-}/.timesaver}/bin/bun"
+ BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 "$chat_bun" - 2>/dev/null <<'BWM_SAVED_CODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const {spawnSync} = require('node:child_process');
+const usable = code => code.length > 0 && code.length <= 4096 && /^[!-~]+$/.test(code);
+try {
+ const result = spawnSync(path.join('/usr/bin', 'security'), ['find-generic-password', '-a', '7de8bd60bd7d76d78621ab9ffd02f7b69850b5ccd6c5c899093bfd6633037c3b', '-s', 'Mindy Delivery Credential 868fb8fb323aa8709604e0d5ef592be9cca89360610c8817920d4afe7de07685', '-w'], {
+  stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000, maxBuffer: 8192, killSignal: 'SIGKILL'
+ });
+ try {
+  if (result.status === 0 && !result.error) {
+   const code = result.stdout.toString('utf8').replace(/\r?\n$/, '');
+   if (usable(code)) { process.stdout.write(code); process.exit(0); }
+  }
+ } finally { result.stdout?.fill(0); result.stderr?.fill(0); }
+} catch {
+ // A failed, denied or timed-out Keychain read falls through to the private file.
+}
+let fd;
+const bytes = Buffer.alloc(4097);
+try {
+ const folder = path.join(process.env.HOME, '.mindy/access-code');
+ // Never follow a link in the folder path, including the member's hidden MINDY folder.
+ let part = path.parse(folder).root;
+ for (const name of folder.slice(part.length).split(path.sep)) {
+  part = path.join(part, name);
+  if (fs.lstatSync(part).isSymbolicLink()) throw new Error();
+ }
+ const owned = info => info.uid === process.getuid() && !(info.mode & 0o077);
+ const directory = fs.lstatSync(folder);
+ if (!directory.isDirectory() || !owned(directory) || !(directory.mode & 0o500)) throw new Error();
+ const file = path.join(folder, 'mindy-access-code');
+ const before = fs.lstatSync(file);
+ const plain = info => info.isFile() && info.nlink === 1 && owned(info) && (info.mode & 0o400);
+ if (!plain(before) || before.size === 0 || before.size > 4096) throw new Error();
+ fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+ const opened = fs.fstatSync(fd);
+ if (!plain(opened) || opened.dev !== before.dev || opened.ino !== before.ino) throw new Error();
+ let length = 0, read;
+ while (length < bytes.length && (read = fs.readSync(fd, bytes, length, bytes.length - length, null))) length += read;
+ const code = bytes.subarray(0, length).toString('utf8');
+ if (!usable(code)) throw new Error();
+ process.stdout.write(code);
+} catch {
+ process.exitCode = 2;
+} finally {
+ bytes.fill(0);
+ if (fd !== undefined) fs.closeSync(fd);
+}
+BWM_SAVED_CODE
+}
 # A name the member's session already exported stays exported when it is given a new value, so every
 # program setup starts would be handed it. Each name that will hold the code or its signature half is
 # unset first, so setup's own value is never exported.
-unset code code_signature
+unset code code_signature saved_code_used
+saved_code_used=false
 code=
 if [ "${1:-}" = --code-from-chat ]; then
  shift
@@ -208,7 +265,11 @@ if [ "${1:-}" = --code-from-chat ]; then
  fi
  case "$chat_status" in
   0) ;;
-  2) if [ -n "$chosen_action" ]; then printf '%s\n' "$chosen_no_code_message"; else printf '%s\n' "$no_code_message"; fi; exit 0 ;;
+  2) if [ "$chosen_action" = update ] || [ "$chosen_action" = repair ] || [ "$chosen_action" = add-app ]; then
+      code=$(saved_code_on_this_mac) || code=
+      if [ -n "$code" ]; then saved_code_used=true
+      else printf '%s\n' "$chosen_no_code_message"; exit 0; fi
+     else printf '%s\n' "$no_code_message"; exit 0; fi ;;
   3) printf '%s\n' "$chat_reader_missing_message"; exit 0 ;;
   # The newest code given is not a code: nothing is sent, and no earlier code is used in its place.
   4) if [ -n "$chosen_action" ]; then printf '%s\n' "$chosen_not_a_code_message"; else printf '%s\n' "This is not a MINDY access code, so setup can't use it. Copy the code again in full from the message it came in, then $start_mindy with it."; fi; exit 0 ;;
@@ -220,6 +281,18 @@ elif [ "${1:-}" = --code-on-stdin ]; then
  code=$(/usr/bin/sed -n '1p' | /usr/bin/tr -d ' \t\r') || code=
 fi
 if [ -z "$code" ]; then printf '%s\n' "$no_code_message"; exit 0; fi
+# Keep every existing typed-code sentence. Saved-code stops identify the saved code and retry without it.
+if [ "$saved_code_used" = true ]; then
+ not_issued_message="The access code saved on this computer can't install Build With Mindy, so nothing was installed. If you've got a newer Build With Mindy code, $start_mindy with that one, and if not, message the BWM group and let us know."
+ not_active_message="The access code saved on this computer has been switched off, so it can't install Build With Mindy any more. We have the details, so we can see what happened. If you've got a newer code, $start_mindy with that one, and if not, message the BWM group and let us know."
+ unsigned_message="This install package is not a signed MINDY release, so setup stopped before installing anything, to keep this computer safe. We have the details, so we can see what happened. Check you're on your usual internet connection, then $start_mindy and choose the same step again."
+ too_many_message="Too many tries from this internet connection in the last minute, so MINDY's setup server is pausing for a moment. Wait a minute, then $start_mindy and choose the same step again."
+ unreachable_message="Setup could not reach MINDY's setup server, so we could not receive the details. Check you are online, then $start_mindy and choose the same step again."
+ unsigned_unsent_message="This install package is not a signed MINDY release, so setup stopped before installing anything, to keep this computer safe. We could not receive the details. Check you're on your usual internet connection, then $start_mindy and choose the same step again."
+ details_sent_ending="We have the details, so we can see what happened. $start_mindy_capital and choose the same step again."
+ details_not_taken_ending="We could not receive the details. Check you are online, then $start_mindy and choose the same step again."
+ interrupted_message="Setup stopped because it was interrupted. $start_mindy_capital and choose the same step again."
+fi
 exec 2>/dev/null
 
 # The code is a secret. Everything this script prints or keeps goes through redact, which replaces
