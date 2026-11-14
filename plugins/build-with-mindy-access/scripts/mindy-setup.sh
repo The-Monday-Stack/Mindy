@@ -424,6 +424,7 @@ kept=false
 signal=
 step='starting setup'
 stop_message=
+filesystem_stop=false
 stop_reason=
 # Who said the stop's reason, when it is a command's own error rather than setup's own words or a
 # server's answer: tool (a command on this computer, such as mkdir or tar) or engine (MINDY's engine,
@@ -825,6 +826,25 @@ stopped_line() {
 # can fix after it when setup recognised one. The raw reason, a tool's or the engine's own words, is
 # never shown: it goes only to the private stop note and the stop report (decision 2245384).
 
+# Filesystem refusals need Team MINDY, not another identical install attempt.
+# Setup has already downloaded files and enrolled the code before this check, so
+# these messages cannot say that nothing on the computer was changed.
+# disk_stop_line <what send_stop_report returned>
+disk_stop_line() {
+	if [ "$1" = 0 ] && [ -n "$active_version" ]; then
+		disk_existing_sent_sentence="Setup stopped because it could not confirm that this disk can be used for Build With Mindy. Trying again will not help. The Build With Mindy you already have was not changed, so you can keep using it. We have the details, so we can see what happened. You don't need to do anything: we will message you."
+		printf '%s\n' "$disk_existing_sent_sentence"
+	elif [ "$1" = 0 ]; then
+		disk_fresh_sent_sentence="Setup stopped because it could not confirm that this disk can be used for Build With Mindy. Trying again will not help. We have the details, so we can see what happened. You don't need to do anything: we will message you."
+		printf '%s\n' "$disk_fresh_sent_sentence"
+	elif [ -n "$active_version" ]; then
+		printf '%s\n' "Setup stopped because it could not confirm that this disk can be used for Build With Mindy. Trying again will not help. The Build With Mindy you already have was not changed, so you can keep using it. We could not receive the details. Check you are online, then start a new chat, type /bwmteam and tell us setup stopped at the disk check."
+	else
+		disk_fresh_unsent_sentence="Setup stopped because it could not confirm that this disk can be used for Build With Mindy. Trying again will not help. We could not receive the details. Check you are online, then message Mike and tell him setup stopped at the disk check."
+		printf '%s\n' "$disk_fresh_unsent_sentence"
+	fi
+}
+
 # tell <setup exit status>
 tell() {
 	[ -n "$stop_reason" ] || stop_reason="the command for $step gave no reason${stop_status:+ (exit status $stop_status)}"
@@ -852,6 +872,7 @@ tell() {
 	fi
 	if [ "$step" = "checking for installed memory" ]; then said_line=$memory_first_message; fi
 	if [ -n "$app_stop_message" ]; then said_line=$app_stop_message; fi
+	if [ "$filesystem_stop" = true ] && [ "${sent:-}" != 3 ]; then said_line=$(disk_stop_line "${sent:-}"); fi
 	say "$said_line" || :
 	told=true
 	if [ "$note_kept" = true ]; then
@@ -1478,6 +1499,9 @@ if "$bun" "$engine/delivery-cli.ts" --release-signature "$release/release-signat
 	install_status=$?
 	stop_for_gate_sentence "$install" "$install_status"
 	install_reason=$(reason_of "$install")
+	# Match the terminal error code and the structured provider together, never a
+	# historical diagnostic sentence. Keep the complete CLI output for the stop note.
+	if head -n 1 "$install" | grep -q '^{"code":"CAPABILITY_UNSUPPORTED",' && grep -q '"providerId":"filesystem.probe-v1"' "$install"; then filesystem_stop=true; fi
 	if grep -q 'MINDY_HOME_RUNTIME_LAY_FAILED' "$install"; then begin 'setting up MINDY on this computer'; fi
 	said_by engine "$install"
 	stop "$install_reason" "$install_status"
