@@ -1,7 +1,7 @@
 {
   "name": "timesaver",
-  "version": "1.5.2",
-  "description": "MINDY TimeSaver keeps what you asked, decided and did, so your AI can pick up where you left off. For all installation steps, go to https://install.mindy.build.",
+  "version": "1.5.3",
+  "description": "MINDY TimeSaver keeps what you asked, decided and did, so your AI can pick up where you left off.",
   "author": {
     "name": "Mindy"
   },

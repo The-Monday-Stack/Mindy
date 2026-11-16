@@ -1036,6 +1036,6 @@ if [ "$repairing" = true ]; then
 fi
 printf '%s\n' "MINDY TimeSaver is now $(folder_place)."
 print_welcome
-printf '%s\n' "If you need help, type /mindyteam and your message. For all installation steps, go to https://install.mindy.build."
+printf '%s\n' "If you need help, type /mindyteam and your message."
 
 if [ "$account_plugin" = false ]; then printf "MTS_HOST_UI=%s\n" "$(host_ui)"; fi
