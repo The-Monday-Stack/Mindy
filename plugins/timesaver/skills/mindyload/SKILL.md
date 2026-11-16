@@ -150,7 +150,7 @@ If the user types mindyload with no argument, list the available sessions and da
 
 For each returned item, show its `label` as ordinary text, exactly as returned, for example: `5 October 2026, timesaver test followup`. Never show its `path`, a filename, or code formatting. Keep its path only to read the chosen item. Do not read any files. Nothing gets read into context until the user picks. Only a picked hit with `source` may load outside memory, through the same `--path` reader. Otherwise do not load files outside MINDY TimeSaver memory. Do not change files during mindyload.
 
-If the reader returns `MTS_SAVE_REFUSED`, relay its following message word for word, hide the marker and stop. Otherwise, if the reader fails, say exactly: `MINDY TimeSaver couldn't open your saved sessions just now, but your saves are all still there. Type /mindyload again, and if it stops a second time, type /mindyteam to let us know.`
+If the reader returns `MTS_SAVE_REFUSED`, relay its following message word for word, hide the marker and stop. Otherwise, if the reader fails, say exactly: `MINDY TimeSaver couldn't open your saved sessions just now, but your saves are all still there. Type /mindyload again, and if it stops a second time, type /mindyteam to let us know. If /mindyteam does not work, open https://install.mindy.build/help and follow the instructions there.`
 
 ## Verification
 

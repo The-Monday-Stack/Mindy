@@ -51,13 +51,28 @@ print_welcome() {
  printf '%s\n' "MINDY TimeSaver is ready. It works in whatever folder you open the app in, and everything goes into one memory. Start a session with /mindyload, and type /mindyend when you finish to save it. Nothing will be saved to your TimeSaver unless you type /mindyend at the end of a session."
 }
 
+# Use the 1.11.2 setup records, with pending chat keeping taking precedence.
+help_setup_finished() {
+ [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ] || return 1
+ [ ! -f "$HOME/.timesaver/setup-progress.json" ] || return 1
+}
 show_help() {
- cat <<'MTS_HOW_TO'
+ cat <<'MTS_HOW_TO_START'
 Type /mindyend at the end of a session to save it.
 Use /mindysave to keep the words of a chat.
 Use /mindyload to give your AI all the context it needs for any work you've saved.
 Use /mindysearch to search for anything in your TimeSaver.
+MTS_HOW_TO_START
+ if help_setup_finished; then
+  cat <<'MTS_HELP_CONTACT'
 Use /mindyteam to send a bug report, give feedback or ask a question.
+MTS_HELP_CONTACT
+ else
+  cat <<'MTS_HELP_CONTACT'
+Open https://install.mindy.build/help to send a bug report, give feedback or ask a question.
+MTS_HELP_CONTACT
+ fi
+ cat <<'MTS_HOW_TO'
 Use /mindyhelp for a reminder of these instructions.
 
 Here's what to do right now to immediately save time with your TimeSaver...
@@ -720,7 +735,7 @@ runtime_tail=$(sed -n 's/.*"componentId":"mts-bun-runtime"\(.*\)/\1/p' "$manifes
 runtime_entry=$(printf '%s\n' "$runtime_tail" | sed -n "s|.*\({[^{}]*\"path\":\"mts-install/sealed-parts/bun/darwin-$arch/bun\"[^{}]*}\).*|\1|p" | head -n 1)
 bun_digest=$(printf '%s\n' "$runtime_entry" | sed -n 's/.*"fileDigest":"\(sha256:[^"]*\)".*/\1/p')
 bun="$release/components/mts-bun-runtime/mts-install/sealed-parts/bun/darwin-$arch/bun"
-[ -f "$bun" ] || fail_as "This version of MINDY TimeSaver came without the part it needs to run on this computer. Trying again won't fix this one, so type /mindyteam and let us know."
+[ -f "$bun" ] || fail_as "This version of MINDY TimeSaver came without the part it needs to run on this computer. Trying again won't fix this one, but don't worry, we can sort it out. Please open https://install.mindy.build/help and follow the instructions there."
 held shasum -a 256 "$bun" >"$tmp/runtime-digest" 2>/dev/null || fail_as "$unsigned"
 [ "sha256:$(sed 's/[[:space:]].*$//' "$tmp/runtime-digest")" = "$bun_digest" ] || fail_as "$unsigned"
 chmod 700 "$bun" 2>"$tmp/chmod.err" || { remember_tool_error "$?" "$tmp/chmod.err"; fail_as "$generic"; }

@@ -2,6 +2,6 @@ MINDY TimeSaver saves you time by saving every time you asked a question, made a
 
 Use /mindyend to save a session, /mindyload to bring earlier work into the conversation, and /mindysearch to find your saved memories. Your saves stay in your own folder on this computer. To set up, type /install-mts. For all installation steps, go to https://install.mindy.build.
 
-Use /mindyteam to send a bug report, give feedback or ask a question.
+Open https://install.mindy.build/help to send a bug report, give feedback or ask a question.
 
 Use /mindysave to keep the words of a chat.

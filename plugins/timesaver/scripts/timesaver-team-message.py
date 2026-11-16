@@ -58,7 +58,7 @@ def without_codes(text, code=''):
 
 def failure(reason, message, code):
     reason = ' '.join(without_codes(reason, code).splitlines())
-    print(reason + ' Your message: ' + json.dumps(without_codes(message, code), ensure_ascii=False) + '. Type /mindyteam again to try again.')
+    print(reason + ' Your message: ' + json.dumps(without_codes(message, code), ensure_ascii=False) + '. Type /mindyteam again to try again. '+ 'If /mindyteam does not work, open https://install.mindy.build/help and follow the instructions there.')
     return 1
 
 
