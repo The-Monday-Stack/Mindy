@@ -24,7 +24,8 @@ Use the complete exported conversation when available, otherwise only the exact 
 
 Prepare Markdown with each speaker's messages in order, preserving every available word and punctuation mark. Keep tool blocks in the raw copy and remove only tool blocks from the other copy. Use the current date and a descriptive lowercase slug for `chats/raw/YY-MM-DD-<slug>-raw.md` and `chats/YYYY-MM/YY-MM-DD <slug>.md`. If either path already exists, choose the next unused numbered slug for both copies. Never replace an existing file.
 
-Re-read the saving setting immediately before writing, then write both copies through the connected-folder tools and read both whole files back through those tools. Require their contents to equal the prepared copies before confirming. If either write or read-back cannot be confirmed, say exactly: `I couldn't check both copies of this chat were saved, so please don't count on them yet. Your next step is to simply try again: type /mindysave, and if it happens twice, type /mindyteam and let us know. If /mindyteam does not work, open https://install.mindy.build/help and follow the instructions there.` and stop. A cloud file or download attachment is not a Mac save. After both read-backs match, use the confirmation below and stop without running a local engine command.
+<!-- Mike approved, 15 November 2026 (Event 4295154). -->
+Re-read the saving setting immediately before writing, then write both copies through the connected-folder tools and read both whole files back through those tools. Require their contents to equal the prepared copies before confirming. If either write or read-back cannot be confirmed, say exactly: `I couldn't check both copies of this chat were saved, so please don't count on them yet. Your next step is to simply try again: type /mindysave, and if it happens twice, type /mindyteam and let us know.` and stop. A cloud file or download attachment is not a Mac save. After both read-backs match, use the confirmation below and stop without running a local engine command.
 
 ### Local engine route
 
@@ -44,7 +45,7 @@ Check the raw and denoised destination paths before invoking the writer. If eith
 
 The save input is JSONL with `message.role` set to `user` or `assistant` and `message.content` holding the original text or content blocks. For a Codex transcript, find the file whose session metadata matches `CODEX_THREAD_ID`, and use a deterministic script to copy its `response_item` message text into that input shape, preserving message order and exact text. Keep function calls and results as `tool_use` and `tool_result` blocks in the raw input. Prepare this converted input only in the app's temporary folder after the saving check passes. Do not reconstruct a transcript from remembered messages. If the current transcript cannot be identified or converted without losing words, say exactly: `I couldn't find a complete copy of this chat to save, so I haven't saved anything. The chat itself is still right here.` and stop.
 
-Before writing in a restricted local session, obtain write access to the person's recorded saves folder and `<home>/.timesaver`, following mindyend's own-storage permission route. Apply that access to temporary input preparation too when required. Use this permission reason exactly: `Save this chat to your MINDY TimeSaver saves folder on this computer.` A declined permission stops without a failure report or a success confirmation.
+Before writing in a restricted local session, obtain write access to the person's recorded saves folder and `<home>/.timesaver`, following mindyend's own-storage permission route. Apply that access to temporary input preparation too when required. Use this permission reason exactly: `Save this chat to your MINDY TimeSaver saves folder on this computer.` A declined permission stops without a failure report or a success confirmation. Say exactly: `No problem, nothing has been saved, and the chat itself is still right here. Whenever you'd like to save it word for word, simply type /mindysave again and allow it when asked.` Then stop.
 
 ```sh
 "${CLAUDE_PLUGIN_ROOT}/scripts/bun-runtime.sh" timesaver-install/runtime/memory.ts save-chat --slug "<slug>" --transcript "<transcript-file>" --mode both
@@ -54,7 +55,8 @@ Before writing in a restricted local session, obtain write access to the person'
 "${CLAUDE_PLUGIN_ROOT}/scripts/bun-runtime.sh" timesaver-install/runtime/memory.ts save-chat --slug "<slug>" --mode both
 ```
 
-Require both `raw:` and `denoise:` results with nonzero message counts. Read both returned files in full and check the original message text remains verbatim, with only tool blocks removed from the denoised copy. Keep paths and technical output for these checks only. If either copy cannot be confirmed, say exactly: `I couldn't check both copies of this chat were saved, so please don't count on them yet. Your next step is to simply try again: type /mindysave, and if it happens twice, type /mindyteam and let us know. If /mindyteam does not work, open https://install.mindy.build/help and follow the instructions there.` and stop.
+<!-- Mike approved, 15 November 2026 (Event 4295154). -->
+Require both `raw:` and `denoise:` results with nonzero message counts. Read both returned files in full and check the original message text remains verbatim, with only tool blocks removed from the denoised copy. Keep paths and technical output for these checks only. If either copy cannot be confirmed, say exactly: `I couldn't check both copies of this chat were saved, so please don't count on them yet. Your next step is to simply try again: type /mindysave, and if it happens twice, type /mindyteam and let us know.` and stop.
 
 ### Confirm to the person
 

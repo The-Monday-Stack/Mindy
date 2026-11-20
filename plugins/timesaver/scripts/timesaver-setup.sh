@@ -48,13 +48,21 @@ folder_place() {
  esac
 }
 print_welcome() {
- printf '%s\n' "MINDY TimeSaver is ready. It works in whatever folder you open the app in, and everything goes into one memory. Start a session with /mindyload, and type /mindyend when you finish to save it. Nothing will be saved to your TimeSaver unless you type /mindyend at the end of a session."
+ printf '%s\n' "MINDY TimeSaver is ready. It works in whatever folder you open the app in, and everything goes into one memory. Start a session with /mindyload, and type /mindyend when you finish to save it. TimeSaver saves when you ask it to: simply type /mindyend at the end of a session, or /mindysave to keep the words of a chat. In the ChatGPT app and Codex, it also saves a long chat for you just before the app shortens it, so nothing gets lost. And from what you've saved, it keeps your daily to yearly summaries up to date for you."
 }
 
-# Use the 1.11.2 setup records, with pending chat keeping taking precedence.
+# Use the same installed-record/transaction check as setup, with its existing
+# pending writer and chat-keeping stages taking precedence over that record.
 help_setup_finished() {
  [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ] || return 1
  [ ! -f "$HOME/.timesaver/setup-progress.json" ] || return 1
+ if [ -f "$HOME/.timesaver/writer/install-change.json" ]; then
+  [ -x "$HOME/.timesaver/bin/bun" ] || return 1
+  (cd "$HOME/.timesaver" && /usr/bin/env BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 "$HOME/.timesaver/bin/bun" -e '
+   const change = await Bun.file(process.argv[1]).json();
+   process.exit(change.setupPending === true ? 1 : 0);
+  ' "$HOME/.timesaver/writer/install-change.json") >/dev/null 2>&1 || return 1
+ fi
 }
 show_help() {
  cat <<'MTS_HOW_TO_START'
@@ -130,8 +138,13 @@ fi
 unset code chat_code_copy chat_pipe
 account_plugin=false
 chosen_action=
+writer_mode=--prepare
 while [ "$#" -gt 0 ]; do
  case "$1" in
+  --writer-choice)
+   shift
+   case "${1:-}" in prepare) writer_mode=--writer-prepare ;; keep) writer_mode=--writer-keep ;; *) exit 1 ;; esac
+   shift ;;
   --account-plugin) account_plugin=true; shift ;;
   --chosen-action)
    shift; chosen_action=${1:-}
@@ -266,18 +279,43 @@ step_group() {
   /bin/sleep 0.05; step_looks=$((step_looks + 1))
  done
 }
-group_left() { kill -0 -- "-$1" 2>/dev/null; }
+group_left() {
+ kill -0 "-$1" 2>/dev/null || return 1
+ # Linux includes an ended, uncollected process in this check. The holder
+ # deliberately keeps that process to reserve the group number, but there is
+ # nothing to stop once only ended processes remain. Keep the original check
+ # on macOS, and keep waiting if Linux process records cannot be read.
+ if [ -r /proc/self/stat ]; then
+  group_target=$1
+  for group_proc in /proc/[0-9]*; do
+   case ${group_proc##*/} in *[!0-9]*) continue ;; esac
+   if IFS= read -r group_stat 2>/dev/null <"$group_proc/stat"; then :
+   elif [ ! -d "$group_proc" ]; then continue
+   else return 0
+   fi
+   case $group_stat in *') '*) group_stat=${group_stat##*) } ;; *) return 0 ;; esac
+   set -- $group_stat
+   if [ "$#" -lt 3 ]; then return 0; fi
+   case $3 in ''|*[!0-9]*) return 0 ;; esac
+   if [ "$3" = "$group_target" ]; then
+    case $1 in Z|X) ;; *) return 0 ;; esac
+   fi
+  done
+  return 1
+ else return 0
+ fi
+}
 # Usage: end_groups <group number...>. Each group's holder is still kept.
 end_groups() {
  [ "$#" -gt 0 ] || return 0
- for end_group in "$@"; do if group_left "$end_group"; then kill -TERM -- "-$end_group" 2>/dev/null || :; kill -CONT -- "-$end_group" 2>/dev/null || :; fi; done
+ for end_group in "$@"; do if group_left "$end_group"; then kill -TERM "-$end_group" 2>/dev/null || :; kill -CONT "-$end_group" 2>/dev/null || :; fi; done
  end_looks=0
  while :; do
   end_left=
   for end_group in "$@"; do if group_left "$end_group"; then end_left="$end_left $end_group"; fi; done
   [ -n "$end_left" ] || return 0
   if [ "$end_looks" -eq "$group_grace" ]; then
-   for end_group in $end_left; do kill -KILL -- "-$end_group" 2>/dev/null || :; done
+   for end_group in $end_left; do kill -KILL "-$end_group" 2>/dev/null || :; done
   fi
   # KILL ends a process at once, unless it cannot be ended at all (one that
   # belongs to another user, or is stuck in the system). Setup does not wait
@@ -477,10 +515,10 @@ gate_curl() { /usr/bin/curl "$@"; }
 # setup still keeps that group's holder (see gate_transfer).
 transfer_stall_seconds=120
 transfer_watch='group=$1 output=$2 limit=$3 marker=$4 watched_size=-1 still=0
-while kill -0 -- "-$group" 2>/dev/null; do
+while kill -0 "-$group" 2>/dev/null; do
  size=$(wc -c <"$output" 2>/dev/null | tr -d " ") || size=0
  if [ "$size" != "$watched_size" ]; then watched_size=$size; still=0; else still=$((still + 1)); fi
- if [ "$still" -ge "$limit" ]; then : >"$marker"; kill -TERM -- "-$group" 2>/dev/null; kill -CONT -- "-$group" 2>/dev/null; exit 0; fi
+ if [ "$still" -ge "$limit" ]; then : >"$marker"; kill -TERM "-$group" 2>/dev/null; kill -CONT "-$group" 2>/dev/null; exit 0; fi
  /bin/sleep 1
 done'
 # Usage: gate_transfer <output file> <curl arguments>. curl's -w output is left in "$tmp/transfer-status".
@@ -634,10 +672,10 @@ installed_version=
 if [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then
   installed_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.timesaver/install-state.json" | head -n 1)
  fi
-# The ordinary command repairs the signed current release, including a missing
-# managed file or a deferred memory registration. Keep the existing help reply.
 repairing=false
-if [ "$chosen_action" != update ] && [ -f "$HOME/.timesaver/install-state.json" ] && [ ! -f "$HOME/.timesaver/install-transaction.json" ]; then repairing=true; fi
+writer_setup_pending=false
+writer_first_install=false
+writer_setup_version=
 trap on_exit EXIT
 
 [ -n "$tmp" ] || tmp=$(mktemp -d 2>&1) || { last_tool_error=$tmp; tmp=; fail_as "$generic"; }
@@ -652,6 +690,25 @@ if [ -x "$home/.timesaver/bin/bun" ] && [ ! -f "$home/.timesaver/install-transac
  [ -d "$content_root" ] || fail_as "MINDY TimeSaver cannot reach your saves folder $(folder_place). Reconnect its disk or cloud folder, then try again. Your existing saves have not been changed."
 fi
 state_root="$home/.timesaver"
+# A writer approval pause has installation state, but its original setup is
+# still unfinished. Keep the journal's release and first-install identity.
+if [ -f "$state_root/writer/install-change.json" ] && [ -x "$state_root/bin/bun" ]; then
+ held "$state_root/bin/bun" -e '
+  const change = await Bun.file(process.argv[1]).json();
+  if (change.setupPending === true) {
+   console.log(change.previous.product ? "update" : "install");
+   console.log(change.next.version);
+  }
+ ' "$state_root/writer/install-change.json" >"$tmp/writer-setup" || fail_as "$generic"
+ if [ -s "$tmp/writer-setup" ]; then
+  writer_setup_pending=true
+  [ "$(sed -n '1p' "$tmp/writer-setup")" != install ] || writer_first_install=true
+  writer_setup_version=$(sed -n '2p' "$tmp/writer-setup")
+ fi
+fi
+# The ordinary command repairs a finished signed release. A pending first
+# install instead continues to the welcome and chat-keeping steps.
+if [ "$chosen_action" != update ] && [ "$writer_first_install" = false ] && [ -f "$state_root/install-state.json" ] && [ ! -f "$state_root/install-transaction.json" ]; then repairing=true; fi
 ensure_install_number || { number_status=$?; [ "$number_status" = 2 ] || fail_as "$generic"; }
 
 packument="$tmp/packument.json"
@@ -669,12 +726,13 @@ grep -q '"name"[[:space:]]*:[[:space:]]*"mts"' "$packument" || fail_as "$unsigne
 tags=$(sed -n 's/.*"dist-tags"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\1/p' "$packument" | head -n 1)
 version=$(printf '%s\n' "$tags" | sed -n 's/.*"latest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 # Repair the installed release. A later version still uses the existing yes-to-update route.
-if [ "$repairing" = true ] && [ -n "$installed_version" ]; then version=$installed_version; fi
+if [ "$writer_setup_pending" = true ]; then version=$writer_setup_version
+elif [ "$repairing" = true ] && [ -n "$installed_version" ]; then version=$installed_version; fi
 case "$version" in [0-9]*.[0-9]*.[0-9]*) ;; *) fail_as "$unsigned" ;; esac
 entry=$(sed -n "s/.*\"$version\"[[:space:]]*:[[:space:]]*{\([^}]*\)}.*/\1/p" "$packument" | head -n 1)
 integrity=$(printf '%s\n' "$entry" | sed -n 's/.*"integrity"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 case "$integrity" in sha512-*) ;; *) fail_as "$unsigned" ;; esac
-if [ "${chosen_action:-}" = update ] && [ "$version" = "${installed_version:-}" ]; then
+if [ "${chosen_action:-}" = update ] && [ "$version" = "${installed_version:-}" ] && [ "$writer_setup_pending" = false ]; then
  finished=true
  printf '%s\n' "MINDY TimeSaver is already up to date, at version $version, so nothing has changed. You can carry on using it as you are."
  exit 0
@@ -735,6 +793,7 @@ runtime_tail=$(sed -n 's/.*"componentId":"mts-bun-runtime"\(.*\)/\1/p' "$manifes
 runtime_entry=$(printf '%s\n' "$runtime_tail" | sed -n "s|.*\({[^{}]*\"path\":\"mts-install/sealed-parts/bun/darwin-$arch/bun\"[^{}]*}\).*|\1|p" | head -n 1)
 bun_digest=$(printf '%s\n' "$runtime_entry" | sed -n 's/.*"fileDigest":"\(sha256:[^"]*\)".*/\1/p')
 bun="$release/components/mts-bun-runtime/mts-install/sealed-parts/bun/darwin-$arch/bun"
+# Mike approved, 15 November 2026 (Event 4295154).
 [ -f "$bun" ] || fail_as "This version of MINDY TimeSaver came without the part it needs to run on this computer. Trying again won't fix this one, but don't worry, we can sort it out. Please open https://install.mindy.build/help and follow the instructions there."
 held shasum -a 256 "$bun" >"$tmp/runtime-digest" 2>/dev/null || fail_as "$unsigned"
 [ "sha256:$(sed 's/[[:space:]].*$//' "$tmp/runtime-digest")" = "$bun_digest" ] || fail_as "$unsigned"
@@ -813,11 +872,15 @@ fi
 install_result="$tmp/install.json"
 step='installing MINDY TimeSaver'
 had_previous=false
-[ ! -f "$state_root/install-state.json" ] || had_previous=true
+if [ "$writer_first_install" = false ] && [ -f "$state_root/install-state.json" ]; then had_previous=true; fi
 if [ "$recovered_current" = false ]; then
- run_step "$bun" "$installer" "$release" "$content_root" "$state_root" --prepare >"$install_result" 2>/dev/null || fail_as "$generic"
+ run_step "$bun" "$installer" "$release" "$content_root" "$state_root" "$writer_mode" >"$install_result" 2>/dev/null || fail_as "$generic"
 fi
 
+if [ -f "$install_result" ] && grep -q '"writerMessage"' "$install_result"; then
+ run_step "$bun" -e 'const r=await Bun.file(process.argv[1]).json();if(r.writerMessage)console.log(r.writerMessage);' "$install_result"
+ if grep -q '"writerPending":true' "$install_result"; then finished=true; exit 0; fi
+fi
 marketplace="$state_root/plugin-marketplace"
 # A registration that failed is undone, and the person is told whether the app stopped making progress.
 app_failed() { app_error=$last_tool_error; app_reason=$generic; [ ! -f "$tmp/app-stalled" ] || app_reason=$app_stalled; rollback_registration || app_reason=$generic; last_tool_error=$app_error; fail_as "$app_reason"; }

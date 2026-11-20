@@ -150,7 +150,7 @@ If the user types mindyload with no argument, list the available sessions and da
 
 For each returned item, show its `label` as ordinary text, exactly as returned, for example: `5 October 2026, timesaver test followup`. Never show its `path`, a filename, or code formatting. Keep its path only to read the chosen item. Do not read any files. Nothing gets read into context until the user picks. Only a picked hit with `source` may load outside memory, through the same `--path` reader. Otherwise do not load files outside MINDY TimeSaver memory. Do not change files during mindyload.
 
-If the reader returns `MTS_SAVE_REFUSED`, relay its following message word for word, hide the marker and stop. Otherwise, if the reader fails, say exactly: `MINDY TimeSaver couldn't open your saved sessions just now, but your saves are all still there. Type /mindyload again, and if it stops a second time, type /mindyteam to let us know. If /mindyteam does not work, open https://install.mindy.build/help and follow the instructions there.`
+If the reader returns `MTS_SAVE_REFUSED`, relay its following message word for word, hide the marker and stop. Otherwise, if the reader fails, say exactly: `MINDY TimeSaver couldn't open your saved sessions just now, but your saves are all still there. Type /mindyload again, and if it stops a second time, type /mindyteam to let us know.`
 
 ## Verification
 
@@ -171,3 +171,5 @@ If the reader returns `MTS_SAVE_REFUSED`, relay its following message word for w
 | `mindyload` | Browse | Lists available memory by name |
 | `mindyload the thing from the other day` | Browse | mindy-search finds MINDY TimeSaver matches → lists them, asks which one |
 | `mindyload planning session` | Search | A clear name match loads immediately even when other memories mention it; otherwise several matches are listed |
+
+If a search result has a `warning`, relay that warning exactly before any other results. Do not load a `conflicted` result as a valid entry or choose either version as correct. An `incomplete` result means some saves could not be searched, so do not say nothing was found or claim the search covered everything. Keep its paths and variant details internal.

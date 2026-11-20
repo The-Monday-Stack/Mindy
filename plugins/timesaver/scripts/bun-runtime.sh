@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-[ -n "${HOME:-}" ] || { printf '%s\n' "MINDY TimeSaver couldn't find your home folder on this computer, so it stopped there. Start a new session and try again, and if you see this again, type /mindyteam and let us know." >&2; exit 1; }
+# Mike approved, 15 November 2026 (Event 4295154).
+[ -n "${HOME:-}" ] || { printf '%s\n' "MINDY TimeSaver couldn't find your home folder on this computer, so it stopped there. Don't worry, here's what to do - start a new session and try again, and if you see this again, open https://install.mindy.build/help and follow the instructions there." >&2; exit 1; }
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export MTS_PRODUCT=mts
@@ -68,6 +69,7 @@ if [ ! -r "$content_root/timesaver.json" ]; then
 fi
 if MTS_CONTENT_ROOT=$(CDPATH= cd -- "$content_root" 2>/dev/null && pwd); then :; else folder_unreachable; fi
 export MTS_CONTENT_ROOT
+# Only this installed launch explicitly enables native writer notifications.
 cd "$MTS_CONTENT_ROOT"
 
 # Setting commands and session start run even while saving is off.
@@ -84,7 +86,7 @@ case "${1:-}:${2:-}" in
  timesaver-install/runtime/memory.ts:*) ;;
  *)
 case "${1:-}" in
- */privacy.ts|*/session-start.ts|timesaver-install/runtime/claim-events.ts|timesaver-install/runtime/read-memory.ts|timesaver-install/runtime/remove.ts|timesaver-install/runtime/move.ts|timesaver-install/runtime/import-old-memory.ts|timesaver-install/runtime/team-message.ts|MY-MIND/MY-SYSTEM/utilities/mindy-search.ts|MY-MIND/MY-SYSTEM/utilities/claude-chat-keeping.ts|bin/save-failure.ts) ;;
+ timesaver-install/runtime/writer-install.ts|*/person-writer-process.ts|*/privacy.ts|*/session-start.ts|timesaver-install/runtime/claim-events.ts|timesaver-install/runtime/read-memory.ts|timesaver-install/runtime/remove.ts|timesaver-install/runtime/move.ts|timesaver-install/runtime/import-old-memory.ts|timesaver-install/runtime/team-message.ts|MY-MIND/MY-SYSTEM/utilities/mindy-search.ts|MY-MIND/MY-SYSTEM/utilities/claude-chat-keeping.ts|bin/save-failure.ts) ;;
  *)
   if [ "${2:-}" = --quote-labels ] && [ "$#" -eq 2 ]; then :; else
    case "${1:-}" in

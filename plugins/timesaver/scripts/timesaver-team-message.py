@@ -58,7 +58,7 @@ def without_codes(text, code=''):
 
 def failure(reason, message, code):
     reason = ' '.join(without_codes(reason, code).splitlines())
-    print(reason + ' Your message: ' + json.dumps(without_codes(message, code), ensure_ascii=False) + '. Type /mindyteam again to try again. '+ 'If /mindyteam does not work, open https://install.mindy.build/help and follow the instructions there.')
+    print(reason + ('' if message is None else ' Your message: ' + json.dumps(without_codes(message, code), ensure_ascii=False) + '.') + ' Type /mindyteam again to try again. '+ 'If /mindyteam does not work, open https://install.mindy.build/help and follow the instructions there.')
     return 1
 
 
@@ -146,8 +146,10 @@ def main(arguments, message):
 
 
 if __name__ == '__main__':
+    message = None
     try:
-        sys.exit(main(sys.argv[1:], sys.stdin.read()))
+        original = sys.stdin.read()
+        message = without_codes(original[:-1] if original.endswith('\n') else original)
+        sys.exit(main(sys.argv[1:], original))
     except Exception:
-        print(UNREACHABLE)
-        sys.exit(1)
+        sys.exit(failure(UNREACHABLE, message, ''))

@@ -62,6 +62,15 @@ function run(): void {
  noLinkedParents(statePath);
  if (info(statePath)?.isSymbolicLink()) throw new Error("TIMESAVER_CLEANUP_LINKED_STATE");
  const removedPath = join(stateRoot, "removed.json");
+ const interrupted=join(stateRoot,"remove-transaction.json");
+ noLinkedParents(interrupted);
+ if(info(interrupted)){
+  if(info(interrupted)?.isSymbolicLink())throw new Error("TIMESAVER_CLEANUP_LINKED_STATE");
+  const change=JSON.parse(readFileSync(interrupted,"utf8"));
+  // Mike approved, 15 November 2026 (Event 4295154).
+  throw new Error(typeof change.help?.failed==="string"?change.help.failed:"TimeSaver could not finish removal safely. Don't stress, keep the remaining files as they are, open https://install.mindy.build/help and follow the instructions there.");
+ }
+
  const retry = !info(statePath);
  if (retry && (!info(removedPath) || info(removedPath)?.isSymbolicLink() || JSON.parse(readFileSync(removedPath, "utf8")).removed !== true)) {
   throw new Error("MINDY TimeSaver isn't fully set up on this computer yet. Type /install-mts to finish, then try again.");
